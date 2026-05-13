@@ -1,0 +1,196 @@
+{% extends 'payroll/base.html' %}
+{% load humanize %}
+
+{% block content %}
+
+
+<div class="card">
+    <div class="controls">
+        <div class="date-nav">
+            <a href="?date={{ prev_week|date:'Y-m-d' }}" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
+            <span>Tuần: {{ start_date|date:"d/m/Y" }} - {{ end_date|date:"d/m/Y" }}</span>
+            <a href="?date={{ next_week|date:'Y-m-d' }}" class="btn btn-outline"><i
+                    class="fas fa-chevron-right"></i></a>
+        </div>
+        <div style="flex-grow: 1;"></div>
+        <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
+            <i class="fas fa-user-plus"></i> Thêm người làm
+        </button>
+        <a href="?date={{ start_date|date:'Y-m-d' }}&export=excel" class="btn btn-primary">
+            <i class="fas fa-file-excel"></i> Xuất Excel
+        </a>
+    </div>
+
+    <form action="{% url 'save_attendance' %}" method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th rowspan="2">STT</th>
+                        <th rowspan="2">Họ tên</th>
+                        <th rowspan="2">Nghề</th>
+                        {% for d in dates %}
+                        <th colspan="2" style="text-align: center;">{{ d|date:"D d/m" }}</th>
+                        {% endfor %}
+                        <th rowspan="2">Tổng HC</th>
+                        <th rowspan="2">Tổng TC</th>
+                        <th rowspan="2">Lương ngày</th>
+                        <th rowspan="2">Tăng/Giảm</th>
+                        <th rowspan="2">Tổng lãnh</th>
+                        <th rowspan="2">Thao tác</th>
+                    </tr>
+                    <tr>
+                        {% for d in dates %}
+                        <th style="font-size: 0.7rem; text-align: center;">HC</th>
+                        <th style="font-size: 0.7rem; text-align: center;">TC</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in payroll_data %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ row.employee.name }}</td>
+                        <td>{{ row.employee.position }}</td>
+                        {% for att in row.daily_attendance %}
+                        <td class="hc-col" style="text-align: center;">
+                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
+                                value="{{ att.hc_symbol }}" class="att-input">
+                        </td>
+                        <td class="tc-col" style="text-align: center;">
+                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
+                                value="{{ att.tc_symbol }}" class="att-input">
+                        </td>
+                        {% endfor %}
+                        <td style="text-align: center; font-weight: bold;">{{ row.total_hc }}</td>
+                        <td style="text-align: center; font-weight: bold;">{{ row.total_tc }}</td>
+                        <td class="wage" style="text-align: right;">{{ row.employee.daily_wage|floatformat:0|intcomma }}
+                        </td>
+                        <td style="text-align: right;">
+                            <input type="number"
+                                name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
+                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input">
+                        </td>
+                        <td class="total-col" style="text-align: right;">{{ row.total_pay|floatformat:0|intcomma }}</td>
+                        <td style="text-align: center;">
+                            <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                                <button type="button" class="btn-icon btn-edit"
+                                    onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name }}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <a href="{% url 'delete_employee' row.employee.id %}" class="btn-icon btn-delete"
+                                    onclick="return confirm('Bạn có chắc chắn muốn xóa nhân viên này?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ dates|length|add:dates|length|add:8 }}"
+                            style="text-align: center; padding: 3rem;">
+                            Chưa có dữ liệu nhân viên. <a href="/admin/payroll/employee/add/"
+                                style="color: var(--primary);">Thêm nhân viên ngay</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary" style="padding: 1rem 3rem;">
+                <i class="fas fa-save"></i> LƯU CHẤM CÔNG
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Modal Thêm Người Làm -->
+<div id="add-worker-modal" class="modal">
+    <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2 style="font-size: 1.25rem;">Thêm Người Làm Công</h2>
+            <button onclick="document.getElementById('add-worker-modal').style.display='none'" class="btn btn-outline"
+                style="padding: 0.25rem 0.5rem;">&times;</button>
+        </div>
+        <form action="{% url 'add_employee' %}" method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>Họ và tên</label>
+                <input type="text" name="name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Nghề / Chức vụ</label>
+                <select name="position" class="form-input">
+                    <option value="Tho">Thợ</option>
+                    <option value="Phu">Phụ</option>
+                    <option value="Cai">Cai</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Lương ngày (VNĐ)</label>
+                <input type="number" name="daily_wage" required class="form-input" placeholder="Ví dụ: 400000">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">TẠO NGƯỜI LÀM</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Chỉnh Sửa -->
+<div id="edit-worker-modal" class="modal">
+    <div class="modal-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2 style="font-size: 1.25rem;">Chỉnh Sửa Thông Tin</h2>
+            <button onclick="document.getElementById('edit-worker-modal').style.display='none'" class="btn btn-outline"
+                style="padding: 0.25rem 0.5rem;">&times;</button>
+        </div>
+        <form id="edit-worker-form" method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>Họ và tên</label>
+                <input type="text" name="name" id="edit-name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Nghề / Chức vụ</label>
+                <select name="position" id="edit-position" class="form-input">
+                    <option value="Tho">Thợ</option>
+                    <option value="Phu">Phụ</option>
+                    <option value="Cai">Cai</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Lương ngày (VNĐ)</label>
+                <input type="number" name="daily_wage" id="edit-wage" required class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">CẬP NHẬT</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openEditModal(id, name, position, wage) {
+        const modal = document.getElementById('edit-worker-modal');
+        const form = document.getElementById('edit-worker-form');
+
+        document.getElementById('edit-name').value = name;
+        document.getElementById('edit-position').value = position;
+        document.getElementById('edit-wage').value = wage;
+
+        form.action = `/edit-employee/${id}/`;
+        modal.style.display = 'block';
+    }
+
+    // Đóng modal khi click ra ngoài
+    window.onclick = function (event) {
+        if (event.target == document.getElementById('add-worker-modal')) {
+            document.getElementById('add-worker-modal').style.display = 'none';
+        }
+        if (event.target == document.getElementById('edit-worker-modal')) {
+            document.getElementById('edit-worker-modal').style.display = 'none';
+        }
+    }
+</script>
+{% endblock %}
