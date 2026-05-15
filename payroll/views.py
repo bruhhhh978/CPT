@@ -30,35 +30,39 @@ def from_symbol(val):
     except:
         return Decimal('0.0')
 
-def payroll_sheet(request):
+def get_target_date(request):
     date_str = request.GET.get('date')
     if date_str:
-        target_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-    else:
-        target_date = timezone.now().date()
+        return datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+    return timezone.now().date()
 
-    dates = get_week_range(target_date)
-    start_date, end_date = dates[0], dates[-1]
-
-    if request.GET.get('export') == 'excel':
-        return export_payroll_excel(start_date, end_date)
-
+def get_filtered_employees(search_query=''):
     employees = Employee.objects.all().order_by('name')
+    if search_query:
+        employees = employees.filter(name__icontains=search_query)
+    return employees
+
+def build_weekly_payroll_data(employees, dates):
+    start_date, end_date = dates[0], dates[-1]
     payroll_data = []
 
     for emp in employees:
+        attendance_map = {
+            att.date: att
+            for att in Attendance.objects.filter(employee=emp, date__range=(start_date, end_date))
+        }
         daily_atts = []
         total_hc = Decimal('0.0')
         total_tc = Decimal('0.0')
 
         for d in dates:
-            att = Attendance.objects.filter(employee=emp, date=d).first()
+            att = attendance_map.get(d)
             hc = att.regular_workday if att else Decimal('0.0')
             tc = att.overtime_workday if att else Decimal('0.0')
-            
+
             total_hc += hc
             total_tc += tc
-            
+
             daily_atts.append({
                 'date': d,
                 'hc_symbol': to_symbol(hc) if hc > 0 else '',
@@ -67,7 +71,6 @@ def payroll_sheet(request):
 
         adj = Adjustment.objects.filter(employee=emp, start_date=start_date, end_date=end_date).first()
         adjustment_val = adj.amount if adj else Decimal('0.0')
-        
         total_pay = (total_hc * emp.daily_wage) + (total_tc * (emp.daily_wage / Decimal('8'))) + adjustment_val
 
         payroll_data.append({
@@ -79,6 +82,20 @@ def payroll_sheet(request):
             'total_pay': total_pay
         })
 
+    return payroll_data
+
+def payroll_sheet(request):
+    target_date = get_target_date(request)
+    search_query = request.GET.get('q', '').strip()
+    dates = get_week_range(target_date)
+    start_date, end_date = dates[0], dates[-1]
+
+    if request.GET.get('export') == 'excel':
+        return export_payroll_excel(start_date, end_date)
+
+    employees = get_filtered_employees(search_query)
+    payroll_data = build_weekly_payroll_data(employees, dates)
+
     context = {
         'dates': dates,
         'start_date': start_date,
@@ -86,8 +103,63 @@ def payroll_sheet(request):
         'prev_week': start_date - datetime.timedelta(days=7),
         'next_week': start_date + datetime.timedelta(days=7),
         'payroll_data': payroll_data,
+        'search_query': search_query,
     }
     return render(request, 'payroll/payroll_sheet.html', context)
+
+def payroll_statistics(request):
+    target_date = get_target_date(request)
+    search_query = request.GET.get('q', '').strip()
+    dates = get_week_range(target_date)
+    start_date, end_date = dates[0], dates[-1]
+
+    employees = get_filtered_employees(search_query)
+    payroll_data = build_weekly_payroll_data(employees, dates)
+
+    total_hc = sum((row['total_hc'] for row in payroll_data), Decimal('0.0'))
+    total_tc = sum((row['total_tc'] for row in payroll_data), Decimal('0.0'))
+    total_pay = sum((row['total_pay'] for row in payroll_data), Decimal('0'))
+
+    daily_totals = []
+    for current_date in dates:
+        daily_hc = Decimal('0.0')
+        daily_tc = Decimal('0.0')
+        for row in payroll_data:
+            for att in row['daily_attendance']:
+                if att['date'] == current_date:
+                    daily_hc += from_symbol(att['hc_symbol'])
+                    daily_tc += from_symbol(att['tc_symbol'])
+                    break
+        daily_totals.append({
+            'label': current_date.strftime('%d/%m'),
+            'hc': float(daily_hc),
+            'tc': float(daily_tc),
+        })
+
+    chart_rows = [
+        {
+            'name': row['employee'].name,
+            'hc': float(row['total_hc']),
+            'tc': float(row['total_tc']),
+        }
+        for row in payroll_data
+    ]
+
+    context = {
+        'start_date': start_date,
+        'end_date': end_date,
+        'prev_week': start_date - datetime.timedelta(days=7),
+        'next_week': start_date + datetime.timedelta(days=7),
+        'search_query': search_query,
+        'payroll_data': payroll_data,
+        'employee_count': len(payroll_data),
+        'total_hc': total_hc,
+        'total_tc': total_tc,
+        'total_pay': total_pay,
+        'daily_totals': daily_totals,
+        'chart_rows': chart_rows,
+    }
+    return render(request, 'payroll/payroll_statistics.html', context)
 
 def add_employee(request):
     if request.method == 'POST':

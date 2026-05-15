@@ -7,20 +7,34 @@
 <div class="card">
     <div class="controls">
         <div class="date-nav">
-            <a href="?date={{ prev_week|date:'Y-m-d' }}" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
+            <a href="?date={{ prev_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
             <span>Tuần: {{ start_date|date:"d/m/Y" }} - {{ end_date|date:"d/m/Y" }}</span>
-            <a href="?date={{ next_week|date:'Y-m-d' }}" class="btn btn-outline"><i
+            <a href="?date={{ next_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i
                     class="fas fa-chevron-right"></i></a>
         </div>
 
         <div style="flex-grow: 1;"></div>
+        <form method="GET" class="search-form">
+            <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+            <div class="search-input-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm nhân viên theo tên" class="search-input">
+            </div>
+            <button type="submit" class="btn btn-outline">Tìm</button>
+            {% if search_query %}
+            <a href="?date={{ start_date|date:'Y-m-d' }}" class="btn btn-outline">Xóa lọc</a>
+            {% endif %}
+        </form>
         <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
             <i class="fas fa-user-plus"></i> Thêm người làm
         </button>
         <button onclick="document.getElementById('import-excel-modal').style.display='block'" class="btn btn-outline">
             <i class="fas fa-file-import"></i> Nhập Excel
         </button>
-        <a href="?date={{ start_date|date:'Y-m-d' }}&export=excel" class="btn btn-primary">
+        <a href="{% url 'payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
+            <i class="fas fa-chart-column"></i> Xem thống kê
+        </a>
+        <a href="?date={{ start_date|date:'Y-m-d' }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
             <i class="fas fa-file-excel"></i> Xuất Excel
         </a>
         <a href="{% url 'delete_all_data' %}" class="btn" style="background: #ef4444; color: white;"
@@ -32,8 +46,8 @@
     <form action="{% url 'save_attendance' %}" method="POST">
         {% csrf_token %}
         <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
-        <div class="table-container">
-            <table>
+        <div class="table-container payroll-table-wrap">
+            <table class="payroll-table">
                 <thead>
                     <tr>
                         <th rowspan="2" class="resisable">STT<div class="resizer"></div>
@@ -115,9 +129,13 @@
                         <td colspan="23"
                             style="text-align: center; padding: 4rem; color: var(--text-muted); font-size: 1rem;">
                             <i class="fas fa-users-slash" style="font-size: 2rem; display: block; margin-bottom: 1rem; opacity: 0.5;"></i>
+                            {% if search_query %}
+                            Không tìm thấy nhân viên phù hợp với từ khóa "{{ search_query }}".
+                            {% else %}
                             Chưa có dữ liệu nhân viên. <br>
                             <a href="#" onclick="document.getElementById('add-worker-modal').style.display='block'"
                                 style="color: var(--primary); font-weight: bold; text-decoration: underline;">Thêm nhân viên ngay</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -260,36 +278,6 @@
 
         resizer.addEventListener("mousedown", mouseDownHandler);
     });
-
-    // Xử lý công tắc Thu gọn bảng
-    const compactToggle = document.getElementById('compact-toggle');
-    const container = document.querySelector('.container');
-    const tableContainer = document.querySelector('.table-container');
-
-    // Mặc định là Dàn đều (No-wrap)
-    container.style.maxWidth = 'none';
-    container.style.width = 'max-content';
-    tableContainer.classList.add('no-wrap-mode');
-    tableContainer.style.overflowX = 'auto';
-    document.body.style.overflowX = 'auto';
-
-    compactToggle.onchange = function () {
-        if (this.checked) {
-            // Chế độ THU GỌN: ON
-            container.style.maxWidth = '100%';
-            container.style.width = '100%';
-            tableContainer.classList.remove('no-wrap-mode');
-            tableContainer.style.overflowX = 'hidden';
-            document.body.style.overflowX = 'hidden';
-        } else {
-            // Chế độ THU GỌN: OFF (Dàn đều)
-            container.style.maxWidth = 'none';
-            container.style.width = 'max-content';
-            tableContainer.classList.add('no-wrap-mode');
-            tableContainer.style.overflowX = 'auto';
-            document.body.style.overflowX = 'auto';
-        }
-    };
 
     // Đóng modal khi click ra ngoài
     window.onclick = function (event) {

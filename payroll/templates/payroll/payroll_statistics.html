@@ -1,0 +1,207 @@
+{% extends 'payroll/base.html' %}
+{% load humanize %}
+
+{% block title %}Thống kê công việc - CPT{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="stats-shell">
+    <div class="card">
+        <div class="controls">
+            <div class="date-nav">
+                <a href="?date={{ prev_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
+                <span>Thống kê tuần: {{ start_date|date:"d/m/Y" }} - {{ end_date|date:"d/m/Y" }}</span>
+                <a href="?date={{ next_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i class="fas fa-chevron-right"></i></a>
+            </div>
+
+            <div style="flex-grow: 1;"></div>
+            <form method="GET" class="search-form">
+                <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+                <div class="search-input-wrap">
+                    <i class="fas fa-search"></i>
+                    <input type="text" name="q" value="{{ search_query }}" placeholder="Lọc theo tên nhân viên" class="search-input">
+                </div>
+                <button type="submit" class="btn btn-outline">Tìm</button>
+                {% if search_query %}
+                <a href="?date={{ start_date|date:'Y-m-d' }}" class="btn btn-outline">Xóa lọc</a>
+                {% endif %}
+            </form>
+            <a href="{% url 'payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
+                <i class="fas fa-table"></i> Về bảng lương
+            </a>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">Nhân viên hiển thị</span>
+            <strong class="stat-value">{{ employee_count }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Tổng công hành chính</span>
+            <strong class="stat-value">{{ total_hc }}</strong>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Tổng tăng ca</span>
+            <strong class="stat-value">{{ total_tc }}</strong>
+        </div>
+        <div class="stat-card accent">
+            <span class="stat-label">Tổng chi trả tuần</span>
+            <strong class="stat-value">{{ total_pay|floatformat:0|intcomma }} đ</strong>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="card chart-card">
+            <div class="section-heading">
+                <div>
+                    <h3>Biểu đồ theo nhân viên</h3>
+                    <p>So sánh tổng thời gian làm việc và tăng ca trong tuần.</p>
+                </div>
+            </div>
+            <canvas id="employeeChart"></canvas>
+        </div>
+        <div class="card chart-card">
+            <div class="section-heading">
+                <div>
+                    <h3>Biểu đồ theo ngày</h3>
+                    <p>Theo dõi biến động công HC và TC từng ngày trong tuần.</p>
+                </div>
+            </div>
+            <canvas id="dailyChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="section-heading">
+            <div>
+                <h3>Bảng thống kê tuần</h3>
+                <p>Tổng hợp nhanh công, tăng ca, điều chỉnh và số tiền thực nhận.</p>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Nhân viên</th>
+                        <th>Nghề</th>
+                        <th>Tổng HC</th>
+                        <th>Tổng TC</th>
+                        <th>Điều chỉnh</th>
+                        <th>Tổng lãnh</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in payroll_data %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ row.employee.name }}</td>
+                        <td>{{ row.employee.position }}</td>
+                        <td>{{ row.total_hc }}</td>
+                        <td>{{ row.total_tc }}</td>
+                        <td>{{ row.adjustment|floatformat:0|intcomma }} đ</td>
+                        <td class="total-col">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="empty-state-cell">
+                            Không có dữ liệu để thống kê trong bộ lọc hiện tại.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{{ chart_rows|json_script:"employee-chart-data" }}
+{{ daily_totals|json_script:"daily-chart-data" }}
+
+<script>
+    const employeeRows = JSON.parse(document.getElementById('employee-chart-data').textContent);
+    const dailyRows = JSON.parse(document.getElementById('daily-chart-data').textContent);
+
+    const employeeChartCtx = document.getElementById('employeeChart');
+    const dailyChartCtx = document.getElementById('dailyChart');
+
+    new Chart(employeeChartCtx, {
+        type: 'bar',
+        data: {
+            labels: employeeRows.map(item => item.name),
+            datasets: [
+                {
+                    label: 'Công HC',
+                    data: employeeRows.map(item => item.hc),
+                    backgroundColor: 'rgba(249, 115, 22, 0.75)',
+                    borderRadius: 8,
+                },
+                {
+                    label: 'Công TC',
+                    data: employeeRows.map(item => item.tc),
+                    backgroundColor: 'rgba(14, 165, 233, 0.75)',
+                    borderRadius: 8,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+
+    new Chart(dailyChartCtx, {
+        type: 'line',
+        data: {
+            labels: dailyRows.map(item => item.label),
+            datasets: [
+                {
+                    label: 'Tổng HC',
+                    data: dailyRows.map(item => item.hc),
+                    borderColor: 'rgba(249, 115, 22, 1)',
+                    backgroundColor: 'rgba(249, 115, 22, 0.18)',
+                    fill: true,
+                    tension: 0.35
+                },
+                {
+                    label: 'Tổng TC',
+                    data: dailyRows.map(item => item.tc),
+                    borderColor: 'rgba(14, 165, 233, 1)',
+                    backgroundColor: 'rgba(14, 165, 233, 0.12)',
+                    fill: true,
+                    tension: 0.35
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
