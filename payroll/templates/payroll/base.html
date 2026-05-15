@@ -20,10 +20,14 @@
                 <h1>Công Ty TNHH Xây Dựng CPT</h1>
             </div>
             <nav class="nav-links">
-                <a href="{% url 'payroll_sheet' %}">Bảng công</a>
+                <!--  -->
                 <a href="/admin/">Quản trị (Admin)</a>
             </nav>
         </header>
+
+        <h2 style="text-align: center; text-transform: uppercase; margin: 1.5rem 0; font-weight: 900; letter-spacing: 0.2em; color: white; text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); font-size: 2.5rem;">
+            BẢNG CHẤM VÀ TÍNH LƯƠNG
+        </h2>
 
         <main>
             {% block content %}{% endblock %}

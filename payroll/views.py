@@ -1,230 +1,321 @@
 import datetime
-from django.shortcuts import render, redirect
-from django.http import HttpResponse
-from .models import Employee, Attendance, Adjustment
-import pandas as pd
+from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
-from decimal import Decimal, InvalidOperation
+from django.db.models import Sum
+from .models import Employee, Attendance, Adjustment
+from decimal import Decimal
+import pandas as pd
+from django.http import HttpResponse
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
+from django.contrib.humanize.templatetags.humanize import intcomma
 
-def get_week_range(date=None):
-    if date is None:
-        date = timezone.now().date()
-    # Find the Monday of the week
+def get_week_range(date):
     start = date - datetime.timedelta(days=date.weekday())
-    # Generate dates for the week
-    dates = [start + datetime.timedelta(days=i) for i in range(7)]
-    return dates
+    return [start + datetime.timedelta(days=i) for i in range(7)]
+
+def to_symbol(val):
+    if val >= 1.0: return 'x'
+    if val >= 0.5: return '/'
+    return ''
+
+def from_symbol(val):
+    if val is None: return Decimal('0.0')
+    val_str = str(val).strip().lower()
+    if val_str == 'x': return Decimal('1.0')
+    if val_str == '/': return Decimal('0.5')
+    if not val_str: return Decimal('0.0')
+    try:
+        return Decimal(val_str)
+    except:
+        return Decimal('0.0')
 
 def payroll_sheet(request):
-    # Default to current week
-    target_date_str = request.GET.get('date')
-    if target_date_str:
-        target_date = datetime.datetime.strptime(target_date_str, '%Y-%m-%d').date()
+    date_str = request.GET.get('date')
+    if date_str:
+        target_date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
     else:
         target_date = timezone.now().date()
-    
+
     dates = get_week_range(target_date)
-    start_date = dates[0]
-    end_date = dates[-1]
-    
-    employees = Employee.objects.all()
+    start_date, end_date = dates[0], dates[-1]
+
+    if request.GET.get('export') == 'excel':
+        return export_payroll_excel(start_date, end_date)
+
+    employees = Employee.objects.all().order_by('name')
     payroll_data = []
-    
+
     for emp in employees:
-        emp_attendances = Attendance.objects.filter(employee=emp, date__range=(start_date, end_date))
-        att_map = {att.date: att for att in emp_attendances}
-        
-        row = {
-            'employee': emp,
-            'daily_attendance': []
-        }
-        
+        daily_atts = []
         total_hc = Decimal('0.0')
         total_tc = Decimal('0.0')
-        
+
         for d in dates:
-            att = att_map.get(d)
-            if att:
-                # Convert numbers to symbols for display
-                hc_val = att.regular_workday
-                tc_val = att.overtime_workday
-                
-                def to_symbol(val):
-                    if val == Decimal('1.0'): return 'x'
-                    if val == Decimal('0.5'): return '/'
-                    if val == Decimal('0'): return ''
-                    return str(val).rstrip('0').rstrip('.')
-                
-                row['daily_attendance'].append({
-                    'date': d,
-                    'hc': hc_val,
-                    'tc': tc_val,
-                    'hc_symbol': to_symbol(hc_val),
-                    'tc_symbol': to_symbol(tc_val)
-                })
-                total_hc += hc_val
-                total_tc += tc_val
-            else:
-                row['daily_attendance'].append({
-                    'date': d,
-                    'hc': Decimal('0.0'),
-                    'tc': Decimal('0.0'),
-                    'hc_symbol': '',
-                    'tc_symbol': ''
-                })
-        
-        row['total_hc'] = total_hc
-        row['total_tc'] = total_tc
-        
-        # Get adjustment
+            att = Attendance.objects.filter(employee=emp, date=d).first()
+            hc = att.regular_workday if att else Decimal('0.0')
+            tc = att.overtime_workday if att else Decimal('0.0')
+            
+            total_hc += hc
+            total_tc += tc
+            
+            daily_atts.append({
+                'date': d,
+                'hc_symbol': to_symbol(hc) if hc > 0 else '',
+                'tc_symbol': str(tc) if tc > 0 else ''
+            })
+
         adj = Adjustment.objects.filter(employee=emp, start_date=start_date, end_date=end_date).first()
-        adj_amount = adj.amount if adj else Decimal('0')
-        row['adjustment'] = adj_amount
+        adjustment_val = adj.amount if adj else Decimal('0.0')
         
-        # Calculate total pay
-        # Total Pay = (Total HC + Total TC) * Daily Wage + Adjustment
-        # Note: In some systems, TC might have a different rate, but based on the image:
-        # Tổng lãnh = (Tổng công HC + Tổng công TC) * Tiền công (1 ngày) + Tăng giảm?
-        # Let's check the image row 6: 1.0 HC, 0.0 TC, 560k wage, 250k increase -> 810k. Correct.
-        # Row 7: 4.0 HC, 0.0 TC, 440k wage -> 1,760k. Correct.
-        row['total_pay'] = (total_hc + total_tc) * emp.daily_wage + adj_amount
-        
-        payroll_data.append(row)
+        total_pay = (total_hc * emp.daily_wage) + (total_tc * (emp.daily_wage / Decimal('8'))) + adjustment_val
+
+        payroll_data.append({
+            'employee': emp,
+            'daily_attendance': daily_atts,
+            'total_hc': total_hc,
+            'total_tc': total_tc,
+            'adjustment': adjustment_val,
+            'total_pay': total_pay
+        })
 
     context = {
         'dates': dates,
-        'payroll_data': payroll_data,
         'start_date': start_date,
         'end_date': end_date,
         'prev_week': start_date - datetime.timedelta(days=7),
         'next_week': start_date + datetime.timedelta(days=7),
+        'payroll_data': payroll_data,
     }
-    
-    if request.GET.get('export') == 'excel':
-        return export_payroll_excel(context)
-        
     return render(request, 'payroll/payroll_sheet.html', context)
 
 def add_employee(request):
     if request.method == 'POST':
         name = request.POST.get('name')
-        position = request.POST.get('position')
-        daily_wage = request.POST.get('daily_wage')
-        if name and daily_wage:
-            Employee.objects.create(
-                name=name,
-                position=position,
-                daily_wage=Decimal(daily_wage)
-            )
+        pos = request.POST.get('position')
+        wage = request.POST.get('daily_wage', 0)
+        Employee.objects.create(name=name, position=pos, daily_wage=wage)
     return redirect('payroll_sheet')
 
 def edit_employee(request, pk):
-    emp = Employee.objects.get(pk=pk)
+    emp = get_object_or_404(Employee, pk=pk)
     if request.method == 'POST':
         emp.name = request.POST.get('name')
         emp.position = request.POST.get('position')
-        emp.daily_wage = Decimal(request.POST.get('daily_wage'))
+        emp.daily_wage = request.POST.get('daily_wage')
         emp.save()
     return redirect('payroll_sheet')
 
 def delete_employee(request, pk):
-    emp = Employee.objects.get(pk=pk)
+    emp = get_object_or_404(Employee, pk=pk)
     emp.delete()
+    return redirect('payroll_sheet')
+
+def import_excel(request):
+    if request.method == 'POST' and request.FILES.get('excel_file'):
+        from openpyxl import load_workbook
+        excel_file = request.FILES['excel_file']
+        wb = load_workbook(excel_file, data_only=True)
+        ws = wb.active
+        
+        current_date_str = request.POST.get('current_date')
+        if current_date_str:
+            target_date = datetime.datetime.strptime(current_date_str, '%Y-%m-%d').date()
+        else:
+            target_date = timezone.now().date()
+            
+        dates = get_week_range(target_date)
+        
+        for row in ws.iter_rows(min_row=6):
+            name = row[1].value 
+            if not name: break
+            
+            position = row[2].value 
+            emp, _ = Employee.objects.get_or_create(name=name, defaults={'position': position or 'Tho', 'daily_wage': 0})
+            
+            if position and emp.position != position:
+                emp.position = position
+                emp.save()
+
+            col_idx = 3 
+            for d in dates:
+                hc_val = from_symbol(row[col_idx].value)
+                tc_val = from_symbol(row[col_idx+1].value)
+                
+                att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
+                att.regular_workday = hc_val
+                att.overtime_workday = tc_val
+                att.save()
+                col_idx += 2
+                
+            # Process Wage (Column T - idx 19)
+            wage = row[19].value
+            if wage:
+                try: 
+                    # Clean currency formatting (remove . or , as separators)
+                    clean_wage = str(wage).replace('.', '').replace(',', '')
+                    emp.daily_wage = Decimal(clean_wage)
+                except: pass
+                emp.save()
+                
+            # Process Adjustment (Column U - idx 20)
+            adj_val_raw = row[20].value
+            if adj_val_raw:
+                try:
+                    clean_adj = str(adj_val_raw).replace('.', '').replace(',', '')
+                    adj_val = Decimal(clean_adj)
+                except:
+                    adj_val = Decimal('0')
+                
+                if adj_val != Decimal('0'):
+                    adj, _ = Adjustment.objects.get_or_create(employee=emp, start_date=dates[0], end_date=dates[-1])
+                    adj.amount = adj_val
+                    adj.save()
+
+    return redirect(f"/?date={request.POST.get('current_date', '')}")
+
+def delete_all_data(request):
+    Employee.objects.all().delete()
     return redirect('payroll_sheet')
 
 def save_attendance(request):
     if request.method == 'POST':
-        # Data format from template: attendance_{emp_id}_{date}_{type}
+        current_date_str = request.POST.get('current_date')
+        target_date = datetime.datetime.strptime(current_date_str, '%Y-%m-%d').date()
+        dates = get_week_range(target_date)
+        
         for key, value in request.POST.items():
             if key.startswith('att_'):
                 parts = key.split('_')
-                if len(parts) == 4:
-                    _, emp_id, date_str, att_type = parts
-                    try:
-                        # Convert symbols back to numbers
-                        val_str = value.strip().lower()
-                        if val_str == 'x':
-                            val = Decimal('1.0')
-                        elif val_str == '/':
-                            val = Decimal('0.5')
-                        elif not val_str:
-                            val = Decimal('0.0')
-                        else:
-                            val = Decimal(val_str)
-                            
-                        emp = Employee.objects.get(id=emp_id)
-                        date = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-                        
-                        att, created = Attendance.objects.get_or_create(
-                            employee=emp,
-                            date=date
-                        )
-                        
-                        if att_type == 'hc':
-                            att.regular_workday = val
-                        else:
-                            att.overtime_workday = val
-                        
-                        att.save()
-                    except (InvalidOperation, ValueError, Employee.DoesNotExist):
-                        continue
-                        
+                emp_id = parts[1]
+                date_val = parts[2]
+                att_type = parts[3]
+                
+                emp = Employee.objects.get(id=emp_id)
+                att, _ = Attendance.objects.get_or_create(employee=emp, date=date_val)
+                
+                val = from_symbol(value)
+                if att_type == 'hc':
+                    att.regular_workday = val
+                else:
+                    att.overtime_workday = val
+                att.save()
+                
             elif key.startswith('adj_'):
                 parts = key.split('_')
-                if len(parts) == 4:
-                    _, emp_id, start_str, end_str = parts
-                    try:
-                        val = Decimal(value) if value else Decimal('0')
-                        emp = Employee.objects.get(id=emp_id)
-                        start = datetime.datetime.strptime(start_str, '%Y-%m-%d').date()
-                        end = datetime.datetime.strptime(end_str, '%Y-%m-%d').date()
-                        
-                        adj, created = Adjustment.objects.get_or_create(
-                            employee=emp,
-                            start_date=start,
-                            end_date=end
-                        )
-                        adj.amount = val
-                        adj.save()
-                    except (InvalidOperation, ValueError, Employee.DoesNotExist):
-                        continue
-
+                emp_id = parts[1]
+                emp = Employee.objects.get(id=emp_id)
+                adj, _ = Adjustment.objects.get_or_create(employee=emp, start_date=dates[0], end_date=dates[-1])
+                try:
+                    adj.amount = Decimal(value or '0')
+                    adj.save()
+                except: pass
+                
     return redirect(f"/?date={request.POST.get('current_date', '')}")
 
-def export_payroll_excel(context):
-    data = []
-    headers = ['STT', 'Họ tên', 'Nghề']
-    for d in context['dates']:
-        headers.append(f"{d.strftime('%d/%m')} HC")
-        headers.append(f"{d.strftime('%d/%m')} TC")
-    headers += ['Tổng HC', 'Tổng TC', 'Lương ngày', 'Tăng/Giảm', 'Tổng lãnh']
-    
-    def to_symbol(val):
-        if val == Decimal('1.0'): return 'x'
-        if val == Decimal('0.5'): return '/'
-        if val == 0 or val == Decimal('0'): return ''
-        return str(val)
+def export_payroll_excel(start_date, end_date):
+    dates = [start_date + datetime.timedelta(days=i) for i in range(7)]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Bang Cham Cong"
 
-    for i, row in enumerate(context['payroll_data'], 1):
-        emp_row = [i, row['employee'].name, row['employee'].position]
-        for att in row['daily_attendance']:
-            emp_row.append(to_symbol(att['hc']))
-            emp_row.append(to_symbol(att['tc']))
-        emp_row += [
-            row['total_hc'], 
-            row['total_tc'], 
-            row['employee'].daily_wage, 
-            row['adjustment'], 
-            row['total_pay']
-        ]
-        data.append(emp_row)
+    # Header Info
+    ws.merge_cells('A1:E1')
+    ws['A1'] = "CÔNG TY TNHH XÂY DỰNG CPT"
+    ws['A1'].font = Font(bold=True, size=12)
     
-    df = pd.DataFrame(data, columns=headers)
+    ws.merge_cells('A2:E2')
+    ws['A2'] = "Địa chỉ: TP. Hồ Chí Minh"
     
-    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename=Bang_Luong_{context["start_date"]}.xlsx'
+    ws.merge_cells('A3:V3')
+    ws['A3'] = f"BẢNG CHẤM CÔNG VÀ TÍNH LƯƠNG (Tuần: {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')})"
+    ws['A3'].font = Font(bold=True, size=14)
+    ws['A3'].alignment = Alignment(horizontal='center')
+
+    # Table Headers
+    headers = ['STT', 'Họ tên', 'Nghề']
+    ws.append(headers) # Row 4 placeholder
     
-    with pd.ExcelWriter(response, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Bảng lương')
+    # Merge for STT, Name, Job
+    for col in ['A', 'B', 'C']:
+        ws.merge_cells(f'{col}4:{col}5')
+        ws[f'{col}4'].alignment = Alignment(horizontal='center', vertical='center')
+        ws[f'{col}4'].fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
+
+    ws['A4'], ws['B4'], ws['C4'] = 'STT', 'Họ tên', 'Nghề'
+    
+    # Date headers
+    col_offset = 4 # Column D
+    v_days = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+    for i, d in enumerate(dates):
+        cell = ws.cell(row=4, column=col_offset)
+        cell.value = f"{v_days[i]} {d.strftime('%d/%m')}"
+        ws.merge_cells(start_row=4, start_column=col_offset, end_row=4, end_column=col_offset+1)
+        cell.alignment = Alignment(horizontal='center')
+        cell.fill = PatternFill(start_color="CFE2F3", end_color="CFE2F3", fill_type="solid")
         
+        ws.cell(row=5, column=col_offset).value = "HC"
+        ws.cell(row=5, column=col_offset+1).value = "TC"
+        ws.cell(row=5, column=col_offset).fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+        col_offset += 2
+
+    # Result headers
+    res_headers = ['Tổng HC', 'Tổng TC', 'Lương ngày', 'Tăng/Giảm', 'Tổng lãnh', 'Ký nhận', 'Ghi chú']
+    for i, h in enumerate(res_headers):
+        cell = ws.cell(row=4, column=col_offset + i)
+        cell.value = h
+        ws.merge_cells(start_row=4, start_column=col_offset + i, end_row=5, end_column=col_offset + i)
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
+
+    # Data
+    employees = Employee.objects.all().order_by('name')
+    row_num = 6
+    border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+
+    for idx, emp in enumerate(employees, 1):
+        ws.cell(row=row_num, column=1).value = idx
+        ws.cell(row=row_num, column=2).value = emp.name
+        ws.cell(row=row_num, column=3).value = emp.position
+        
+        total_hc = Decimal('0.0')
+        total_tc = Decimal('0.0')
+        c_idx = 4
+        for d in dates:
+            att = Attendance.objects.filter(employee=emp, date=d).first()
+            hc = att.regular_workday if att else Decimal('0.0')
+            tc = att.overtime_workday if att else Decimal('0.0')
+            ws.cell(row=row_num, column=c_idx).value = to_symbol(hc) if hc > 0 else ""
+            ws.cell(row=row_num, column=c_idx+1).value = float(tc) if tc > 0 else ""
+            total_hc += hc
+            total_tc += tc
+            c_idx += 2
+            
+        ws.cell(row=row_num, column=c_idx).value = float(total_hc)
+        ws.cell(row=row_num, column=c_idx+1).value = float(total_tc)
+        ws.cell(row=row_num, column=c_idx+2).value = float(emp.daily_wage)
+        ws.cell(row=row_num, column=c_idx+2).number_format = '#,##0'
+        
+        adj = Adjustment.objects.filter(employee=emp, start_date=start_date, end_date=end_date).first()
+        adj_val = adj.amount if adj else Decimal('0.0')
+        ws.cell(row=row_num, column=c_idx+3).value = float(adj_val)
+        ws.cell(row=row_num, column=c_idx+3).font = Font(color="FF0000")
+        
+        total_pay = (total_hc * emp.daily_wage) + (total_tc * (emp.daily_wage / Decimal('8'))) + adj_val
+        ws.cell(row=row_num, column=c_idx+4).value = float(total_pay)
+        ws.cell(row=row_num, column=c_idx+4).font = Font(bold=True)
+        ws.cell(row=row_num, column=c_idx+4).number_format = '#,##0'
+        
+        row_num += 1
+
+    # Style all cells
+    for r in ws.iter_rows(min_row=4, max_row=row_num-1, min_col=1, max_col=col_offset+len(res_headers)-1):
+        for cell in r:
+            cell.border = border
+            if not cell.alignment.horizontal:
+                cell.alignment = Alignment(horizontal='center')
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename=BangLuong_{start_date}.xlsx'
+    wb.save(response)
     return response

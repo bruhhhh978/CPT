@@ -1,11 +1,13 @@
 :root {
-    --primary: #f97316; /* Orange */
+    --primary: #f97316;
+    /* Orange */
     --primary-hover: #ea580c;
     --bg-main: #f1f5f9;
-    --card-bg: rgba(255, 255, 255, 0.85); /* Semi-transparent white */
+    --card-bg: rgba(255, 255, 255, 0.85);
+    /* Semi-transparent white */
     --text-main: #0f172a;
     --text-muted: #64748b;
-    --border: rgba(255, 255, 255, 0.3);
+    --border: rgba(15, 23, 42, 0.15); /* Sắc nét hơn một chút */
     --glass: rgba(249, 115, 22, 0.05);
     --success: #10b981;
     --warning: #f59e0b;
@@ -17,20 +19,88 @@
     padding: 0;
     box-sizing: border-box;
     font-family: 'Inter', sans-serif;
+    /* Hide scrollbar for all browsers */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+*::-webkit-scrollbar {
+    display: none;
 }
 
 body {
-    background: linear-gradient(rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.4)), 
-                url('../img/background.jpg') no-repeat center center fixed;
+    background: linear-gradient(rgba(15, 23, 42, 0.4), rgba(15, 23, 42, 0.4)),
+        url('../img/background.jpg') no-repeat center center fixed;
     background-size: cover;
     color: var(--text-main);
     min-height: 100vh;
+    overflow-x: hidden;
+    /* Triệt tiêu cuộn ngang body */
 }
 
 .container {
-    max-width: 1400px;
+    max-width: 100%;
     margin: 0 auto;
-    padding: 2rem;
+    padding: 0.5rem;
+}
+
+/* Toggle Switch Styling */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+}
+
+.switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e1;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: var(--primary);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--primary);
+}
+
+input:checked + .slider:before {
+  transform: translateX(14px);
+}
+
+.slider.round {
+  border-radius: 20px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
 }
 
 header {
@@ -101,12 +171,13 @@ h1 {
     backdrop-filter: blur(12px);
     border-radius: 1rem;
     border: 1px solid var(--border);
-    padding: 1.5rem;
+    padding: 0.75rem;
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
 }
 
 .table-container {
-    overflow-x: auto;
+    overflow-x: hidden;
+    /* Bỏ thanh cuốn ngang */
     border-radius: 0.5rem;
 }
 
@@ -179,23 +250,103 @@ table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 1rem;
+    table-layout: fixed;
+    /* Khóa chiều rộng để không bị tràn */
 }
 
 th {
+    position: relative;
+    /* Quan trọng để định vị thanh kéo */
     text-align: left;
-    padding: 1rem;
+    padding: 2px;
     color: var(--text-muted);
     font-weight: 600;
-    font-size: 0.875rem;
+    font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 1px solid var(--border);
 }
 
+/* Thanh kéo giãn cột giống Excel */
+.resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 10px;
+    cursor: col-resize;
+    user-select: none;
+    height: 100%;
+    z-index: 10;
+}
+
+.resizer:hover,
+.resizing {
+    border-right: 2px solid var(--primary);
+}
+
+/* Chế độ dàn đều một dòng (One-click auto fit) */
+.no-wrap-mode table {
+    width: max-content !important;
+    table-layout: auto !important;
+}
+
+.no-wrap-mode td, .no-wrap-mode th {
+    white-space: nowrap !important;
+}
+
+td, th {
+    border: 1px solid var(--border) !important;
+}
+
 td {
-    padding: 1rem;
-    border-bottom: 1px solid var(--border);
-    font-size: 0.95rem;
+    padding: 8px 4px;
+    font-size: 0.75rem;
+    vertical-align: middle;
+    line-height: 1.2;
+}
+
+/* Canh đều theo từng loại dữ liệu như trong ảnh */
+td:nth-child(1) {
+    text-align: center;
+    width: 35px;
+}
+
+/* STT */
+td:nth-child(2) {
+    text-align: left;
+    padding-left: 10px;
+    width: 120px;
+    font-weight: 500;
+}
+
+/* Họ tên */
+td:nth-child(3) {
+    text-align: left;
+    width: 60px;
+}
+
+/* Nghề */
+
+/* Các cột HC/TC lặp lại */
+.hc-col,
+.tc-col {
+    text-align: center !important;
+}
+
+/* Các cột tổng kết */
+td:nth-child(18),
+td:nth-child(19) {
+    text-align: center;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+/* Các cột tiền */
+td:nth-child(20),
+td:nth-child(21),
+td:nth-child(22) {
+    text-align: right;
+    padding-right: 10px;
 }
 
 tr:hover td {
@@ -211,13 +362,14 @@ tr:hover td {
 }
 
 .att-input {
-    width: 45px;
+    width: 25px;
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-main);
     text-align: center;
-    padding: 2px;
+    padding: 1px;
     border-radius: 4px;
+    font-size: 0.75rem;
     transition: all 0.2s;
 }
 
@@ -234,7 +386,7 @@ tr:hover td {
 }
 
 .wage-input {
-    width: 80px;
+    width: 60px;
     text-align: right;
 }
 
