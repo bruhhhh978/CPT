@@ -2,20 +2,57 @@
 {% load humanize %}
 
 {% block content %}
-
+<!-- Flatpickr CSS & JS (Tiếng Việt) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
 
 <div class="card">
     <div class="controls">
-        <div class="date-nav">
-            <a href="?date={{ prev_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
-            <span>Tuần: {{ start_date|date:"d/m/Y" }} - {{ end_date|date:"d/m/Y" }}</span>
-            <a href="?date={{ next_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i
-                    class="fas fa-chevron-right"></i></a>
+        <div class="date-nav" style="display: flex; align-items: center; gap: 0.75rem; background: var(--glass); padding: 0.4rem 1rem; border-radius: 0.5rem; border: 1px solid var(--border);">
+            <select id="view-type-select" style="padding: 0.3rem 0.6rem; font-weight: 600; cursor: pointer; background: transparent; border: none; border-right: 1px solid var(--border); color: var(--text-main); font-size: 0.8rem; outline: none; margin-right: 0.5rem;">
+                <option value="week" {% if view_type == 'week' %}selected{% endif %}>Tuần</option>
+                <option value="month" {% if view_type == 'month' %}selected{% endif %}>Tháng</option>
+            </select>
+
+            <div id="week-picker-wrapper" style="display: {% if view_type == 'week' %}flex{% else %}none{% endif %}; align-items: center; gap: 0.5rem;">
+                <input type="text" id="week-date-picker" value="{{ target_date|date:'d/m/Y' }}" style="background: transparent; border: none; color: var(--primary); font-weight: 700; font-size: 0.8rem; cursor: pointer; outline: none; width: 85px;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; white-space: nowrap;">({{ start_date|date:"d/m" }} - {{ end_date|date:"d/m" }})</span>
+            </div>
+
+            <div id="month-picker-wrapper" style="display: {% if view_type == 'month' %}flex{% else %}none{% endif %}; align-items: center; gap: 0.25rem;">
+                <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">Tháng:</span>
+                <select id="month-select" style="background: transparent; border: none; color: var(--primary); font-weight: 700; font-size: 0.8rem; cursor: pointer; outline: none; padding: 0.1rem 0.3rem;">
+                    <option value="01" {% if target_date|date:'m' == '01' %}selected{% endif %}>1</option>
+                    <option value="02" {% if target_date|date:'m' == '02' %}selected{% endif %}>2</option>
+                    <option value="03" {% if target_date|date:'m' == '03' %}selected{% endif %}>3</option>
+                    <option value="04" {% if target_date|date:'m' == '04' %}selected{% endif %}>4</option>
+                    <option value="05" {% if target_date|date:'m' == '05' %}selected{% endif %}>5</option>
+                    <option value="06" {% if target_date|date:'m' == '06' %}selected{% endif %}>6</option>
+                    <option value="07" {% if target_date|date:'m' == '07' %}selected{% endif %}>7</option>
+                    <option value="08" {% if target_date|date:'m' == '08' %}selected{% endif %}>8</option>
+                    <option value="09" {% if target_date|date:'m' == '09' %}selected{% endif %}>9</option>
+                    <option value="10" {% if target_date|date:'m' == '10' %}selected{% endif %}>10</option>
+                    <option value="11" {% if target_date|date:'m' == '11' %}selected{% endif %}>11</option>
+                    <option value="12" {% if target_date|date:'m' == '12' %}selected{% endif %}>12</option>
+                </select>
+                <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-left: 0.25rem;">Năm:</span>
+                <select id="year-select" style="background: transparent; border: none; color: var(--primary); font-weight: 700; font-size: 0.8rem; cursor: pointer; outline: none; padding: 0.1rem 0.3rem;">
+                    <option value="2024" {% if target_date|date:'Y' == '2024' %}selected{% endif %}>2024</option>
+                    <option value="2025" {% if target_date|date:'Y' == '2025' %}selected{% endif %}>2025</option>
+                    <option value="2026" {% if target_date|date:'Y' == '2026' %}selected{% endif %}>2026</option>
+                    <option value="2027" {% if target_date|date:'Y' == '2027' %}selected{% endif %}>2027</option>
+                    <option value="2028" {% if target_date|date:'Y' == '2028' %}selected{% endif %}>2028</option>
+                    <option value="2029" {% if target_date|date:'Y' == '2029' %}selected{% endif %}>2029</option>
+                    <option value="2030" {% if target_date|date:'Y' == '2030' %}selected{% endif %}>2030</option>
+                </select>
+            </div>
         </div>
 
         <div style="flex-grow: 1;"></div>
         <form method="GET" class="search-form">
             <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+            <input type="hidden" name="view_type" value="{{ view_type }}">
             <div class="search-input-wrap">
                 <i class="fas fa-search"></i>
                 <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm nhân viên theo tên" class="search-input">
@@ -31,10 +68,10 @@
         <button onclick="document.getElementById('import-excel-modal').style.display='block'" class="btn btn-outline">
             <i class="fas fa-file-import"></i> Nhập Excel
         </button>
-        <a href="{% url 'payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
+        <a href="{% url 'payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
             <i class="fas fa-chart-column"></i> Xem thống kê
         </a>
-        <a href="?date={{ start_date|date:'Y-m-d' }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
+        <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
             <i class="fas fa-file-excel"></i> Xuất Excel
         </a>
         <a href="{% url 'delete_all_data' %}" class="btn" style="background: #ef4444; color: white;"
@@ -45,16 +82,33 @@
 
     <form action="{% url 'save_attendance' %}" method="POST">
         {% csrf_token %}
-        <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
+        <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
+        <input type="hidden" name="view_type" value="{{ view_type }}">
+        <input type="hidden" name="q" value="{{ search_query }}">
         <div class="table-container payroll-table-wrap">
             <table class="payroll-table">
+                <colgroup>
+                    <col class="stt-col">
+                    <col class="name-col">
+                    <col class="position-col">
+                    {% for d in dates %}
+                    <col class="hc-col">
+                    <col class="tc-col">
+                    {% endfor %}
+                    <col class="total-hc-col">
+                    <col class="total-tc-col">
+                    <col class="wage-col">
+                    <col class="adj-col">
+                    <col class="total-pay-col">
+                    <col class="actions-col">
+                </colgroup>
                 <thead>
                     <tr>
-                        <th rowspan="2" class="resisable">STT<div class="resizer"></div>
+                        <th rowspan="2" class="resisable stt-col">STT<div class="resizer"></div>
                         </th>
-                        <th rowspan="2" class="resisable">Họ tên<div class="resizer"></div>
+                        <th rowspan="2" class="resisable name-col">Họ tên<div class="resizer"></div>
                         </th>
-                        <th rowspan="2" class="resisable">Nghề<div class="resizer"></div>
+                        <th rowspan="2" class="resisable position-col">Nghề<div class="resizer"></div>
                         </th>
                         {% for d in dates %}
                         <th colspan="2" style="text-align: center;" class="resisable">
@@ -62,56 +116,55 @@
                             <div class="resizer"></div>
                         </th>
                         {% endfor %}
-                        <th rowspan="2" class="resisable">Tổng HC<div class="resizer"></div>
+                        <th rowspan="2" class="resisable total-hc-col">Tổng HC<div class="resizer"></div>
                         </th>
-                        <th rowspan="2" class="resisable">Tổng TC<div class="resizer"></div>
+                        <th rowspan="2" class="resisable total-tc-col">Tổng TC<div class="resizer"></div>
                         </th>
-                        <th rowspan="2" class="resisable">Lương ngày<div class="resizer"></div>
+                        <th rowspan="2" class="resisable wage-col">Lương ngày<div class="resizer"></div>
                         </th>
-                        <th rowspan="2" class="resisable">Tăng/Giảm<div class="resizer"></div>
+                        <th rowspan="2" class="resisable adj-col">Tăng/Giảm<div class="resizer"></div>
                         </th>
-                        <th rowspan="2" class="resisable">Tổng lãnh<div class="resizer"></div>
+                        <th rowspan="2" class="resisable total-pay-col">Tổng lãnh<div class="resizer"></div>
                         </th>
-                        <th rowspan="2">Thao tác</th>
+                        <th rowspan="2" class="actions-col">Thao tác</th>
                     </tr>
                     <tr>
                         {% for d in dates %}
-                        <th style="font-size: 0.7rem; text-align: center;">HC</th>
-                        <th style="font-size: 0.7rem; text-align: center;">TC</th>
+                        <th class="hc-col" style="font-size: 0.7rem; text-align: center;">HC</th>
+                        <th class="tc-col" style="font-size: 0.7rem; text-align: center;">TC</th>
                         {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
                     {% for row in payroll_data %}
                     <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ row.employee.name }}</td>
-                        <td>{{ row.employee.position }}</td>
+                        <td class="stt-col">{{ forloop.counter }}</td>
+                        <td class="name-col">{{ row.employee.name }}</td>
+                        <td class="position-col">{{ row.employee.position }}</td>
                         {% for att in row.daily_attendance %}
                         <td class="hc-col" style="text-align: center;">
-                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
-                                value="{{ att.hc_symbol }}" class="att-input">
+                            <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
+                                {% if att.hc_symbol == 'x' or att.hc_symbol == '1' or att.hc_symbol == '1.0' %}checked{% endif %} class="att-checkbox">
                         </td>
                         <td class="tc-col" style="text-align: center;">
-                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
-                                value="{{ att.tc_symbol }}" class="att-input">
+                            <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
+                                {% if att.tc_symbol == 'x' or att.tc_symbol == '1' or att.tc_symbol == '1.0' %}checked{% endif %} class="att-checkbox">
                         </td>
                         {% endfor %}
-                        <td style="text-align: center; font-weight: bold;">{{ row.total_hc }}</td>
-                        <td style="text-align: center; font-weight: bold;">{{ row.total_tc }}</td>
-                        <td class="wage" style="text-align: right; color: var(--warning); font-weight: 600;">
+                        <td class="total-hc-col">{{ row.total_hc }}</td>
+                        <td class="total-tc-col">{{ row.total_tc }}</td>
+                        <td class="wage wage-col">
                             {{ row.employee.daily_wage|floatformat:0|intcomma }} đ
                         </td>
-                        <td style="text-align: right;">
+                        <td class="adj-col">
                             <input type="number"
                                 name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
                                 value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input">
                         </td>
-                        <td class="total-col"
-                            style="text-align: right; font-weight: 800; color: var(--success); font-size: 0.85rem;">
+                        <td class="total-col total-pay-col" style="font-weight: 800; color: var(--success); font-size: 0.85rem;">
                             {{ row.total_pay|floatformat:0|intcomma }} đ
                         </td>
-                        <td style="text-align: center;">
+                        <td class="actions-col">
                             <div style="display: flex; gap: 0.5rem; justify-content: center;">
                                 <button type="button" class="btn-icon btn-edit"
                                     onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name }}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
@@ -278,6 +331,59 @@
 
         resizer.addEventListener("mousedown", mouseDownHandler);
     });
+
+    // Xử lý chuyển đổi loại view (Tuần/Tháng) và thay đổi ngày/tháng
+    const viewTypeSelect = document.getElementById('view-type-select');
+    const weekDatePicker = document.getElementById('week-date-picker');
+    const monthSelect = document.getElementById('month-select');
+    const yearSelect = document.getElementById('year-select');
+
+    function reloadWithParams(newParams) {
+        const urlParams = new URLSearchParams(window.location.search);
+        for (const [key, value] of Object.entries(newParams)) {
+            if (value === null) {
+                urlParams.delete(key);
+            } else {
+                urlParams.set(key, value);
+            }
+        }
+        window.location.search = urlParams.toString();
+    }
+
+    // Khởi tạo Flatpickr cho ô chọn ngày của tuần
+    if (weekDatePicker) {
+        flatpickr("#week-date-picker", {
+            locale: "vn",
+            dateFormat: "d/m/Y",
+            onChange: function(selectedDates, dateStr) {
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    const formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                    reloadWithParams({ date: formattedDate });
+                }
+            }
+        });
+    }
+
+    if (viewTypeSelect) {
+        viewTypeSelect.onchange = function() {
+            const view = this.value;
+            if (view === 'week') {
+                const parts = weekDatePicker.value.split('/');
+                const formattedDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : weekDatePicker.value;
+                reloadWithParams({ view_type: 'week', date: formattedDate });
+            } else {
+                reloadWithParams({ view_type: 'month', date: `${yearSelect.value}-${monthSelect.value}-01` });
+            }
+        };
+    }
+
+    function handleMonthYearChange() {
+        reloadWithParams({ date: `${yearSelect.value}-${monthSelect.value}-01` });
+    }
+
+    if (monthSelect) monthSelect.onchange = handleMonthYearChange;
+    if (yearSelect) yearSelect.onchange = handleMonthYearChange;
 
     // Đóng modal khi click ra ngoài
     window.onclick = function (event) {

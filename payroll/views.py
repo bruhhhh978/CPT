@@ -87,11 +87,21 @@ def build_weekly_payroll_data(employees, dates):
 def payroll_sheet(request):
     target_date = get_target_date(request)
     search_query = request.GET.get('q', '').strip()
-    dates = get_week_range(target_date)
+    view_type = request.GET.get('view_type', 'week')
+
+    if view_type == 'month':
+        import calendar
+        first_day = target_date.replace(day=1)
+        last_day = target_date.replace(day=calendar.monthrange(target_date.year, target_date.month)[1])
+        dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
+    else:
+        view_type = 'week'
+        dates = get_week_range(target_date)
+
     start_date, end_date = dates[0], dates[-1]
 
     if request.GET.get('export') == 'excel':
-        return export_payroll_excel(start_date, end_date)
+        return export_payroll_excel(dates, start_date, end_date, view_type)
 
     employees = get_filtered_employees(search_query)
     payroll_data = build_weekly_payroll_data(employees, dates)
@@ -104,6 +114,8 @@ def payroll_sheet(request):
         'next_week': start_date + datetime.timedelta(days=7),
         'payroll_data': payroll_data,
         'search_query': search_query,
+        'view_type': view_type,
+        'target_date': target_date,
     }
     return render(request, 'payroll/payroll_sheet.html', context)
 
@@ -244,7 +256,7 @@ def import_excel(request):
                     adj.amount = adj_val
                     adj.save()
 
-    return redirect(f"/?date={request.POST.get('current_date', '')}")
+    return redirect(f"/?date={request.POST.get('current_date', '')}&view_type={request.POST.get('view_type', 'week')}")
 
 def delete_all_data(request):
     Employee.objects.all().delete()
@@ -254,26 +266,37 @@ def save_attendance(request):
     if request.method == 'POST':
         current_date_str = request.POST.get('current_date')
         target_date = datetime.datetime.strptime(current_date_str, '%Y-%m-%d').date()
-        dates = get_week_range(target_date)
-        
-        for key, value in request.POST.items():
-            if key.startswith('att_'):
-                parts = key.split('_')
-                emp_id = parts[1]
-                date_val = parts[2]
-                att_type = parts[3]
-                
-                emp = Employee.objects.get(id=emp_id)
-                att, _ = Attendance.objects.get_or_create(employee=emp, date=date_val)
-                
-                val = from_symbol(value)
-                if att_type == 'hc':
-                    att.regular_workday = val
-                else:
-                    att.overtime_workday = val
+        view_type = request.POST.get('view_type', 'week')
+
+        if view_type == 'month':
+            import calendar
+            first_day = target_date.replace(day=1)
+            last_day = target_date.replace(day=calendar.monthrange(target_date.year, target_date.month)[1])
+            dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
+        else:
+            dates = get_week_range(target_date)
+
+        search_query = request.POST.get('q', '').strip()
+        employees = get_filtered_employees(search_query)
+
+        # 1. Update attendance for visible employees using checkboxes
+        for emp in employees:
+            for d in dates:
+                date_str = d.strftime('%Y-%m-%d')
+                hc_key = f'att_{emp.id}_{date_str}_hc'
+                tc_key = f'att_{emp.id}_{date_str}_tc'
+
+                hc_val = Decimal('1.0') if hc_key in request.POST else Decimal('0.0')
+                tc_val = Decimal('1.0') if tc_key in request.POST else Decimal('0.0')
+
+                att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
+                att.regular_workday = hc_val
+                att.overtime_workday = tc_val
                 att.save()
-                
-            elif key.startswith('adj_'):
+
+        # 2. Update adjustments
+        for key, value in request.POST.items():
+            if key.startswith('adj_'):
                 parts = key.split('_')
                 emp_id = parts[1]
                 emp = Employee.objects.get(id=emp_id)
@@ -282,11 +305,10 @@ def save_attendance(request):
                     adj.amount = Decimal(value or '0')
                     adj.save()
                 except: pass
-                
-    return redirect(f"/?date={request.POST.get('current_date', '')}")
 
-def export_payroll_excel(start_date, end_date):
-    dates = [start_date + datetime.timedelta(days=i) for i in range(7)]
+    return redirect(f"/?date={request.POST.get('current_date', '')}&view_type={request.POST.get('view_type', 'week')}&q={request.POST.get('q', '')}")
+
+def export_payroll_excel(dates, start_date, end_date, view_type='week'):
     wb = Workbook()
     ws = wb.active
     ws.title = "Bang Cham Cong"
@@ -299,8 +321,17 @@ def export_payroll_excel(start_date, end_date):
     ws.merge_cells('A2:E2')
     ws['A2'] = "Địa chỉ: TP. Hồ Chí Minh"
     
-    ws.merge_cells('A3:V3')
-    ws['A3'] = f"BẢNG CHẤM CÔNG VÀ TÍNH LƯƠNG (Tuần: {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')})"
+    # Calculate columns count to merge header row 3 correctly
+    # 3 cols (STT, Name, Job) + 2 * len(dates) + 7 cols (Totals/Actions/etc)
+    total_cols_count = 3 + 2 * len(dates) + 7
+    from openpyxl.utils import get_column_letter
+    max_col_letter = get_column_letter(total_cols_count)
+    
+    ws.merge_cells(f'A3:{max_col_letter}3')
+    if view_type == 'month':
+        ws['A3'] = f"BẢNG CHẤM CÔNG VÀ TÍNH LƯƠNG (Tháng: {start_date.strftime('%m/%Y')})"
+    else:
+        ws['A3'] = f"BẢNG CHẤM CÔNG VÀ TÍNH LƯƠNG (Tuần: {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')})"
     ws['A3'].font = Font(bold=True, size=14)
     ws['A3'].alignment = Alignment(horizontal='center')
 
@@ -321,7 +352,8 @@ def export_payroll_excel(start_date, end_date):
     v_days = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
     for i, d in enumerate(dates):
         cell = ws.cell(row=4, column=col_offset)
-        cell.value = f"{v_days[i]} {d.strftime('%d/%m')}"
+        weekday_idx = d.weekday()
+        cell.value = f"{v_days[weekday_idx]} {d.strftime('%d/%m')}"
         ws.merge_cells(start_row=4, start_column=col_offset, end_row=4, end_column=col_offset+1)
         cell.alignment = Alignment(horizontal='center')
         cell.fill = PatternFill(start_color="CFE2F3", end_color="CFE2F3", fill_type="solid")
@@ -388,6 +420,9 @@ def export_payroll_excel(start_date, end_date):
                 cell.alignment = Alignment(horizontal='center')
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    response['Content-Disposition'] = f'attachment; filename=BangLuong_{start_date}.xlsx'
+    if view_type == 'month':
+        response['Content-Disposition'] = f'attachment; filename=BangLuongThang_{start_date.strftime("%m_%Y")}.xlsx'
+    else:
+        response['Content-Disposition'] = f'attachment; filename=BangLuongTuan_{start_date}.xlsx'
     wb.save(response)
     return response
