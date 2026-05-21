@@ -7,10 +7,22 @@
 <div class="card">
     <div class="controls">
         <div class="date-nav">
-            <a href="?date={{ prev_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
-            <span>Tuần: {{ start_date|date:"d/m/Y" }} - {{ end_date|date:"d/m/Y" }}</span>
-            <a href="?date={{ next_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i
-                    class="fas fa-chevron-right"></i></a>
+            <a href="#" id="btn-prev" class="btn btn-outline">
+                <i class="fas fa-chevron-left"></i>
+            </a>
+
+             <select id="week-select" onchange="changeWeek(this.value)" style="font-weight:bold; padding: 4px 12px; border-radius: 6px; border: 1px solid #ccc; cursor:pointer;">
+                {% for w in available_weeks %}
+                    <option value="{{ w.date_str }}"
+                        {% if w.start == start_date %}selected{% endif %}>
+                        Tuần {{ forloop.counter }}: {{ w.start|date:'d/m' }} - {{ w.end|date:'d/m/Y' }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <a href="#" id="btn-next" class="btn btn-outline">
+                <i class="fas fa-chevron-right"></i>
+            </a>
         </div>
 
         <div style="flex-grow: 1;"></div>
@@ -31,116 +43,23 @@
         <button onclick="document.getElementById('import-excel-modal').style.display='block'" class="btn btn-outline">
             <i class="fas fa-file-import"></i> Nhập Excel
         </button>
-        <a href="{% url 'payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
+        <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
             <i class="fas fa-chart-column"></i> Xem thống kê
         </a>
         <a href="?date={{ start_date|date:'Y-m-d' }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
             <i class="fas fa-file-excel"></i> Xuất Excel
         </a>
-        <a href="{% url 'delete_all_data' %}" class="btn" style="background: #ef4444; color: white;"
+        <a href="{% url 'payroll:delete_all_data' %}" class="btn" style="background: #ef4444; color: white;"
             onclick="return confirm('CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ nhân viên và dữ liệu chấm công. Bạn có chắc chắn không?')">
             <i class="fas fa-trash-alt"></i> Xóa tất cả
         </a>
     </div>
 
-    <form action="{% url 'save_attendance' %}" method="POST">
+    <form action="{% url 'payroll:save_attendance' %}" method="POST">
         {% csrf_token %}
         <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
-        <div class="table-container payroll-table-wrap">
-            <table class="payroll-table">
-                <thead>
-                    <tr>
-                        <th rowspan="2" class="resisable">STT<div class="resizer"></div>
-                        </th>
-                        <th rowspan="2" class="resisable">Họ tên<div class="resizer"></div>
-                        </th>
-                        <th rowspan="2" class="resisable">Nghề<div class="resizer"></div>
-                        </th>
-                        {% for d in dates %}
-                        <th colspan="2" style="text-align: center;" class="resisable">
-                            {{ d|date:"D d/m" }}
-                            <div class="resizer"></div>
-                        </th>
-                        {% endfor %}
-                        <th rowspan="2" class="resisable">Tổng HC<div class="resizer"></div>
-                        </th>
-                        <th rowspan="2" class="resisable">Tổng TC<div class="resizer"></div>
-                        </th>
-                        <th rowspan="2" class="resisable">Lương ngày<div class="resizer"></div>
-                        </th>
-                        <th rowspan="2" class="resisable">Tăng/Giảm<div class="resizer"></div>
-                        </th>
-                        <th rowspan="2" class="resisable">Tổng lãnh<div class="resizer"></div>
-                        </th>
-                        <th rowspan="2">Thao tác</th>
-                    </tr>
-                    <tr>
-                        {% for d in dates %}
-                        <th style="font-size: 0.7rem; text-align: center;">HC</th>
-                        <th style="font-size: 0.7rem; text-align: center;">TC</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in payroll_data %}
-                    <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ row.employee.name }}</td>
-                        <td>{{ row.employee.position }}</td>
-                        {% for att in row.daily_attendance %}
-                        <td class="hc-col" style="text-align: center;">
-                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
-                                value="{{ att.hc_symbol }}" class="att-input">
-                        </td>
-                        <td class="tc-col" style="text-align: center;">
-                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
-                                value="{{ att.tc_symbol }}" class="att-input">
-                        </td>
-                        {% endfor %}
-                        <td style="text-align: center; font-weight: bold;">{{ row.total_hc }}</td>
-                        <td style="text-align: center; font-weight: bold;">{{ row.total_tc }}</td>
-                        <td class="wage" style="text-align: right; color: var(--warning); font-weight: 600;">
-                            {{ row.employee.daily_wage|floatformat:0|intcomma }} đ
-                        </td>
-                        <td style="text-align: right;">
-                            <input type="number"
-                                name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
-                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input">
-                        </td>
-                        <td class="total-col"
-                            style="text-align: right; font-weight: 800; color: var(--success); font-size: 0.85rem;">
-                            {{ row.total_pay|floatformat:0|intcomma }} đ
-                        </td>
-                        <td style="text-align: center;">
-                            <div style="display: flex; gap: 0.5rem; justify-content: center;">
-                                <button type="button" class="btn-icon btn-edit"
-                                    onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name }}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <a href="{% url 'delete_employee' row.employee.id %}" class="btn-icon btn-delete"
-                                    onclick="return confirm('Bạn có chắc chắn muốn xóa nhân viên này?')">
-                                    <i class="fas fa-trash"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="23"
-                            style="text-align: center; padding: 4rem; color: var(--text-muted); font-size: 1rem;">
-                            <i class="fas fa-users-slash" style="font-size: 2rem; display: block; margin-bottom: 1rem; opacity: 0.5;"></i>
-                            {% if search_query %}
-                            Không tìm thấy nhân viên phù hợp với từ khóa "{{ search_query }}".
-                            {% else %}
-                            Chưa có dữ liệu nhân viên. <br>
-                            <a href="#" onclick="document.getElementById('add-worker-modal').style.display='block'"
-                                style="color: var(--primary); font-weight: bold; text-decoration: underline;">Thêm nhân viên ngay</a>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div id="payroll-container">
+            {% include 'payroll/partials/payroll_table.html' %}
         </div>
 
         <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
@@ -159,7 +78,7 @@
             <button onclick="document.getElementById('add-worker-modal').style.display='none'" class="btn btn-outline"
                 style="padding: 0.25rem 0.5rem;">&times;</button>
         </div>
-        <form action="{% url 'add_employee' %}" method="POST">
+        <form action="{% url 'payroll:add_employee' %}" method="POST">
             {% csrf_token %}
             <div class="form-group">
                 <label>Họ và tên</label>
@@ -190,7 +109,7 @@
             <button onclick="document.getElementById('import-excel-modal').style.display='none'" class="btn btn-outline"
                 style="padding: 0.25rem 0.5rem;">&times;</button>
         </div>
-        <form action="{% url 'import_excel' %}" method="POST" enctype="multipart/form-data">
+        <form action="{% url 'payroll:import_excel' %}" method="POST" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
             <div class="form-group">
@@ -249,7 +168,6 @@
         modal.style.display = 'block';
     }
 
-    // Xử lý kéo dãn cột (Excel-like)
     document.querySelectorAll(".resiser, .resizer").forEach(resizer => {
         let x = 0;
         let w = 0;
@@ -279,7 +197,6 @@
         resizer.addEventListener("mousedown", mouseDownHandler);
     });
 
-    // Đóng modal khi click ra ngoài
     window.onclick = function (event) {
         if (event.target == document.getElementById('add-worker-modal')) {
             document.getElementById('add-worker-modal').style.display = 'none';
@@ -291,5 +208,59 @@
             document.getElementById('import-excel-modal').style.display = 'none';
         }
     }
+</script>
+
+<script>
+function changeWeek(date) {
+    const url = `?date=${date}`;
+    fetch(url, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('payroll-container').innerHTML = data.html;
+        document.getElementById('week-select').value = date;
+        updateNavButtons();
+        window.history.pushState({}, '', url);
+    })
+}
+
+function getAvailableWeeks() {
+    return Array.from(document.getElementById('week-select').options).map(opt => opt.value);
+}
+
+function getCurrentWeek() {
+    return document.getElementById('week-select').value;
+}
+
+function updateNavButtons() {
+    const weeks = getAvailableWeeks();
+    const idx = weeks.indexOf(getCurrentWeek());
+
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+
+    btnPrev.style.opacity = idx <= 0 ? '0.3' : '1';
+    btnPrev.style.pointerEvents = idx <= 0 ? 'none' : 'auto';
+
+    btnNext.style.opacity = idx >= weeks.length - 1 ? '0.3' : '1';
+    btnNext.style.pointerEvents = idx >= weeks.length - 1 ? 'none' : 'auto';
+}
+
+document.getElementById('btn-prev').addEventListener('click', function(e) {
+    e.preventDefault();
+    const weeks = getAvailableWeeks();
+    const idx = weeks.indexOf(getCurrentWeek());
+    if (idx > 0) changeWeek(weeks[idx - 1]);
+});
+
+document.getElementById('btn-next').addEventListener('click', function(e) {
+    e.preventDefault();
+    const weeks = getAvailableWeeks();
+    const idx = weeks.indexOf(getCurrentWeek());
+    if (idx < weeks.length - 1) changeWeek(weeks[idx + 1]);
+});
+
+updateNavButtons();
 </script>
 {% endblock %}

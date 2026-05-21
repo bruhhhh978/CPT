@@ -1,4 +1,6 @@
 import datetime
+from urllib import request
+from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum
@@ -9,11 +11,23 @@ from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from django.contrib.humanize.templatetags.humanize import intcomma
-
+from django.template.loader import render_to_string
 def get_week_range(date):
-    start = date - datetime.timedelta(days=date.weekday())
-    return [start + datetime.timedelta(days=i) for i in range(7)]
+    days_since_friday = (date.weekday() - 4) % 7
+    friday = date - datetime.timedelta(days=days_since_friday)
+    return [friday + datetime.timedelta(days=i) for i in range(7)]
 
+def get_available_weeks():
+    dates = Attendance.objects.values_list('date', flat=True).distinct()
+    weeks = set()
+    for d in dates:
+        days_since_friday = (d.weekday() - 4) % 7
+        friday = d - datetime.timedelta(days=days_since_friday)
+        print(f"  date={d} weekday={d.weekday()} days_since_friday={days_since_friday} → friday={friday}")
+        weeks.add(friday)
+    return sorted(weeks)
+    print("available_weeks:", result)
+    return result
 def to_symbol(val):
     if val >= 1.0: return 'x'
     if val >= 0.5: return '/'
@@ -23,7 +37,7 @@ def from_symbol(val):
     if val is None: return Decimal('0.0')
     val_str = str(val).strip().lower()
     if val_str == 'x': return Decimal('1.0')
-    if val_str == '/': return Decimal('0.5')
+    if val_str in ('/', '\\'): return Decimal('0.5')
     if not val_str: return Decimal('0.0')
     try:
         return Decimal(val_str)
@@ -95,6 +109,14 @@ def payroll_sheet(request):
 
     employees = get_filtered_employees(search_query)
     payroll_data = build_weekly_payroll_data(employees, dates)
+    available_weeks = [
+        {
+            'start': w,
+            'end': w + datetime.timedelta(days=6),
+            'date_str': w.strftime('%Y-%m-%d'),
+        }
+        for w in get_available_weeks()
+    ]
 
     context = {
         'dates': dates,
@@ -104,7 +126,18 @@ def payroll_sheet(request):
         'next_week': start_date + datetime.timedelta(days=7),
         'payroll_data': payroll_data,
         'search_query': search_query,
+        'available_weeks': available_weeks,
     }
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        html = render_to_string('payroll/partials/payroll_table.html', context, request=request)
+        return JsonResponse({
+            'html': html,
+            'start_date': start_date.strftime('%d/%m/%Y'),
+            'end_date': end_date.strftime('%d/%m/%Y'),
+            'prev_week': (start_date - datetime.timedelta(days=7)).strftime('%Y-%m-%d'),  # ← thêm
+            'next_week': (start_date + datetime.timedelta(days=7)).strftime('%Y-%m-%d'),  # ← thêm
+    })
     return render(request, 'payroll/payroll_sheet.html', context)
 
 def payroll_statistics(request):
@@ -145,6 +178,14 @@ def payroll_statistics(request):
         for row in payroll_data
     ]
 
+    available_weeks = [
+        {
+            'start': w,
+            'end': w + datetime.timedelta(days=6),
+            'date_str': w.strftime('%Y-%m-%d'),
+        }
+        for w in get_available_weeks()
+    ]
     context = {
         'start_date': start_date,
         'end_date': end_date,
@@ -158,6 +199,7 @@ def payroll_statistics(request):
         'total_pay': total_pay,
         'daily_totals': daily_totals,
         'chart_rows': chart_rows,
+        'available_weeks': available_weeks,
     }
     return render(request, 'payroll/payroll_statistics.html', context)
 
@@ -186,69 +228,96 @@ def delete_employee(request, pk):
 def import_excel(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
         from openpyxl import load_workbook
+        import re
+
         excel_file = request.FILES['excel_file']
         wb = load_workbook(excel_file, data_only=True)
-        ws = wb.active
-        
-        current_date_str = request.POST.get('current_date')
-        if current_date_str:
-            target_date = datetime.datetime.strptime(current_date_str, '%Y-%m-%d').date()
-        else:
-            target_date = timezone.now().date()
-            
-        dates = get_week_range(target_date)
-        
-        for row in ws.iter_rows(min_row=6):
-            name = row[1].value 
-            if not name: break
-            
-            position = row[2].value 
-            emp, _ = Employee.objects.get_or_create(name=name, defaults={'position': position or 'Tho', 'daily_wage': 0})
-            
-            if position and emp.position != position:
-                emp.position = position
-                emp.save()
 
-            col_idx = 3 
-            for d in dates:
-                hc_val = from_symbol(row[col_idx].value)
-                tc_val = from_symbol(row[col_idx+1].value)
-                
-                att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
-                att.regular_workday = hc_val
-                att.overtime_workday = tc_val
-                att.save()
-                col_idx += 2
-                
-            # Process Wage (Column T - idx 19)
-            wage = row[19].value
-            if wage:
-                try: 
-                    # Clean currency formatting (remove . or , as separators)
-                    clean_wage = str(wage).replace('.', '').replace(',', '')
-                    emp.daily_wage = Decimal(clean_wage)
-                except: pass
-                emp.save()
-                
-            # Process Adjustment (Column U - idx 20)
-            adj_val_raw = row[20].value
-            if adj_val_raw:
+        for ws in wb.worksheets:
+            sheet_name = ws.title.strip().lower()
+            if 'tổng' in sheet_name or 'tong' in sheet_name:
+                continue
+
+            header_text = str(ws['G1'].value or '')
+
+            date_matches = re.findall(r'(\d{1,2}/\d{1,2}/(?:\d{4}|\d{2}))', header_text)
+
+            if not date_matches:
+                continue
+            raw_date = date_matches[0]
+
+            try:
                 try:
-                    clean_adj = str(adj_val_raw).replace('.', '').replace(',', '')
-                    adj_val = Decimal(clean_adj)
-                except:
-                    adj_val = Decimal('0')
-                
-                if adj_val != Decimal('0'):
-                    adj, _ = Adjustment.objects.get_or_create(employee=emp, start_date=dates[0], end_date=dates[-1])
-                    adj.amount = adj_val
-                    adj.save()
+                    target_date = datetime.datetime.strptime(raw_date, '%d/%m/%Y').date()
+                except ValueError:
+                    target_date = datetime.datetime.strptime(raw_date, '%d/%m/%y').date()
+            except Exception:
+                continue
+            
+            dates = get_week_range(target_date)
+            for row in ws.iter_rows(min_row=6):
+                name = row[1].value
+                if not name:
+                    continue
 
-    return redirect(f"/?date={request.POST.get('current_date', '')}")
+                position = row[2].value
+                emp, _ = Employee.objects.get_or_create(
+                    name=name,
+                    defaults={'position': position or 'Thợ', 'daily_wage': 0}
+                )
+                if position and emp.position != position:
+                    emp.position = position
+                    emp.save()
+
+                col_idx = 3  # Cột D = index 3
+                for d in dates:
+                    hc_val = from_symbol(row[col_idx].value)
+                    tc_raw = row[col_idx + 1].value
+                    try:
+                        tc_val = Decimal(str(tc_raw)) if tc_raw else Decimal('0')
+                    except:
+                        tc_val = Decimal('0')
+
+                    att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
+                    att.regular_workday = hc_val
+                    att.overtime_workday = tc_val
+                    att.save()
+                    col_idx += 2
+
+                # Lương ngày - cột T (index 19)
+                wage = row[19].value
+                if wage:
+                    try:
+                        emp.daily_wage = Decimal(str(wage).replace('.', '').replace(',', ''))
+                    except:
+                        pass
+                    emp.save()
+
+                # Tăng/giảm - cột U (index 20)
+                adj_val_raw = row[20].value
+                if adj_val_raw:
+                    try:
+                        adj_val = Decimal(str(adj_val_raw).replace('.', '').replace(',', ''))
+                    except:
+                        adj_val = Decimal('0')
+
+                    if adj_val != Decimal('0'):
+                        adj, _ = Adjustment.objects.get_or_create(
+                            employee=emp,
+                            start_date=dates[0],
+                            end_date=dates[-1]
+                        )
+                        adj.amount = adj_val
+                        adj.save()
+
+    last_week = get_available_weeks()
+    if last_week:
+        return redirect(f"/?date={last_week[-1].strftime('%Y-%m-%d')}")
+    return redirect("/")
 
 def delete_all_data(request):
     Employee.objects.all().delete()
-    return redirect('payroll_sheet')
+    return redirect('payroll:payroll_sheet')
 
 def save_attendance(request):
     if request.method == 'POST':
@@ -391,3 +460,5 @@ def export_payroll_excel(start_date, end_date):
     response['Content-Disposition'] = f'attachment; filename=BangLuong_{start_date}.xlsx'
     wb.save(response)
     return response
+
+

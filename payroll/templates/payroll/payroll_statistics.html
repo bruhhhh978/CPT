@@ -12,10 +12,25 @@
     <div class="card">
         <div class="controls">
             <div class="date-nav">
-                <a href="?date={{ prev_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
-                <span>Thống kê tuần: {{ start_date|date:"d/m/Y" }} - {{ end_date|date:"d/m/Y" }}</span>
-                <a href="?date={{ next_week|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline"><i class="fas fa-chevron-right"></i></a>
+                <a href="#" id="btn-prev" class="btn btn-outline">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+
+                <select id="week-select" onchange="location.href='?date='+this.value" 
+                        style="font-weight:bold; padding: 4px 12px; border-radius: 6px; border: 1px solid #ccc; cursor:pointer;">
+                    {% for w in available_weeks %}
+                        <option value="{{ w.date_str }}"
+                            {% if w.start == start_date %}selected{% endif %}>
+                            Tuần {{ forloop.counter }}: {{ w.start|date:'d/m' }} - {{ w.end|date:'d/m/Y' }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <a href="#" id="btn-next" class="btn btn-outline">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
             </div>
+
 
             <div style="flex-grow: 1;"></div>
             <form method="GET" class="search-form">
@@ -29,7 +44,7 @@
                 <a href="?date={{ start_date|date:'Y-m-d' }}" class="btn btn-outline">Xóa lọc</a>
                 {% endif %}
             </form>
-            <a href="{% url 'payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
+            <a href="{% url 'payroll:payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
                 <i class="fas fa-table"></i> Về bảng lương
             </a>
         </div>
@@ -204,4 +219,45 @@
         }
     });
 </script>
+
+<script>
+function getAvailableWeeks() {
+    return Array.from(document.getElementById('week-select').options).map(opt => opt.value);
+}
+
+function getCurrentWeek() {
+    return document.getElementById('week-select').value;
+}
+
+function updateNavButtons() {
+    const weeks = getAvailableWeeks();
+    const idx = weeks.indexOf(getCurrentWeek());
+
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+
+    btnPrev.style.opacity = idx <= 0 ? '0.3' : '1';
+    btnPrev.style.pointerEvents = idx <= 0 ? 'none' : 'auto';
+
+    btnNext.style.opacity = idx >= weeks.length - 1 ? '0.3' : '1';
+    btnNext.style.pointerEvents = idx >= weeks.length - 1 ? 'none' : 'auto';
+}
+
+document.getElementById('btn-prev').addEventListener('click', function(e) {
+    e.preventDefault();
+    const weeks = getAvailableWeeks();
+    const idx = weeks.indexOf(getCurrentWeek());
+    if (idx > 0) location.href = '?date=' + weeks[idx - 1];
+});
+
+document.getElementById('btn-next').addEventListener('click', function(e) {
+    e.preventDefault();
+    const weeks = getAvailableWeeks();
+    const idx = weeks.indexOf(getCurrentWeek());
+    if (idx < weeks.length - 1) location.href = '?date=' + weeks[idx + 1];
+});
+
+updateNavButtons();
+</script>
+
 {% endblock %}

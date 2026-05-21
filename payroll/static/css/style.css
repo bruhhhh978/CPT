@@ -125,6 +125,12 @@ h1 {
     -webkit-text-fill-color: transparent;
 }
 
+/* Nav*/
+.nav-links {
+    display: flex;
+    justify-content: space-between; 
+    align-items: center;
+}
 .nav-links a {
     color: var(--text-muted);
     text-decoration: none;
@@ -134,6 +140,29 @@ h1 {
 
 .nav-links a:hover {
     color: var(--primary);
+}
+
+.user-menu {
+    color: var(--text-muted);
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+.user-menu:hover {
+    color: var(--primary);
+}
+
+.dropdown {
+    display: none;
+    position: absolute;
+    background: white;
+    padding: 10px;
+}
+
+.user-menu:hover .dropdown {
+    display: block;
 }
 
 /* Hero Section */
