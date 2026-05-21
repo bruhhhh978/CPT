@@ -8,6 +8,7 @@ class Employee(models.Model):
     ]
     
     name = models.CharField(max_length=100, verbose_name="Họ tên")
+    date_of_birth = models.DateField(blank=True, null=True, verbose_name="Ngày sinh")
     position = models.CharField(max_length=20, choices=POSITION_CHOICES, verbose_name="Nghề")
     daily_wage = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Tiền công (1 ngày)")
 

@@ -2,8 +2,10 @@ import datetime
 from urllib import request
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.db.models import Sum
+from django.db.models import Q
 from .models import Employee, Attendance, Adjustment
 from decimal import Decimal
 import pandas as pd
@@ -50,11 +52,47 @@ def get_target_date(request):
         return datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
     return timezone.now().date()
 
-def get_filtered_employees(search_query=''):
+def get_search_type(request):
+    search_type = request.GET.get('search_type', 'name').strip().lower()
+    return search_type if search_type in ('name', 'dob') else 'name'
+
+def get_filtered_employees(search_query='', search_type='name'):
     employees = Employee.objects.all().order_by('name')
     if search_query:
-        employees = employees.filter(name__icontains=search_query)
+        employees = employees.filter(build_employee_search_query(search_query, search_type))
     return employees
+
+def parse_birth_date_query(search_query):
+    normalized_query = search_query.strip()
+    for date_format in ('%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d/%m/%y', '%d-%m-%y'):
+        try:
+            return {
+                'match_type': 'full_date',
+                'value': datetime.datetime.strptime(normalized_query, date_format).date(),
+            }
+        except ValueError:
+            continue
+    for date_format in ('%d/%m', '%d-%m'):
+        try:
+            parsed_date = datetime.datetime.strptime(normalized_query, date_format)
+            return {
+                'match_type': 'day_month',
+                'day': parsed_date.day,
+                'month': parsed_date.month,
+            }
+        except ValueError:
+            continue
+    return None
+
+def build_employee_search_query(search_query, search_type='name'):
+    if search_type == 'dob':
+        birth_date_query = parse_birth_date_query(search_query)
+        if not birth_date_query:
+            return Q(pk__in=[])
+        if birth_date_query['match_type'] == 'full_date':
+            return Q(date_of_birth=birth_date_query['value'])
+        return Q(date_of_birth__day=birth_date_query['day'], date_of_birth__month=birth_date_query['month'])
+    return Q(name__icontains=search_query)
 
 def build_weekly_payroll_data(employees, dates):
     start_date, end_date = dates[0], dates[-1]
@@ -101,13 +139,14 @@ def build_weekly_payroll_data(employees, dates):
 def payroll_sheet(request):
     target_date = get_target_date(request)
     search_query = request.GET.get('q', '').strip()
+    search_type = get_search_type(request)
     dates = get_week_range(target_date)
     start_date, end_date = dates[0], dates[-1]
 
     if request.GET.get('export') == 'excel':
         return export_payroll_excel(start_date, end_date)
 
-    employees = get_filtered_employees(search_query)
+    employees = get_filtered_employees(search_query, search_type)
     payroll_data = build_weekly_payroll_data(employees, dates)
     available_weeks = [
         {
@@ -126,6 +165,7 @@ def payroll_sheet(request):
         'next_week': start_date + datetime.timedelta(days=7),
         'payroll_data': payroll_data,
         'search_query': search_query,
+        'search_type': search_type,
         'available_weeks': available_weeks,
     }
 
@@ -143,10 +183,11 @@ def payroll_sheet(request):
 def payroll_statistics(request):
     target_date = get_target_date(request)
     search_query = request.GET.get('q', '').strip()
+    search_type = get_search_type(request)
     dates = get_week_range(target_date)
     start_date, end_date = dates[0], dates[-1]
 
-    employees = get_filtered_employees(search_query)
+    employees = get_filtered_employees(search_query, search_type)
     payroll_data = build_weekly_payroll_data(employees, dates)
 
     total_hc = sum((row['total_hc'] for row in payroll_data), Decimal('0.0'))
@@ -192,6 +233,7 @@ def payroll_statistics(request):
         'prev_week': start_date - datetime.timedelta(days=7),
         'next_week': start_date + datetime.timedelta(days=7),
         'search_query': search_query,
+        'search_type': search_type,
         'payroll_data': payroll_data,
         'employee_count': len(payroll_data),
         'total_hc': total_hc,
@@ -206,24 +248,31 @@ def payroll_statistics(request):
 def add_employee(request):
     if request.method == 'POST':
         name = request.POST.get('name')
+        date_of_birth = request.POST.get('date_of_birth') or None
         pos = request.POST.get('position')
         wage = request.POST.get('daily_wage', 0)
-        Employee.objects.create(name=name, position=pos, daily_wage=wage)
-    return redirect('payroll_sheet')
+        Employee.objects.create(
+            name=name,
+            date_of_birth=date_of_birth,
+            position=pos,
+            daily_wage=wage
+        )
+    return redirect('payroll:payroll_sheet')
 
 def edit_employee(request, pk):
     emp = get_object_or_404(Employee, pk=pk)
     if request.method == 'POST':
         emp.name = request.POST.get('name')
+        emp.date_of_birth = request.POST.get('date_of_birth') or None
         emp.position = request.POST.get('position')
         emp.daily_wage = request.POST.get('daily_wage')
         emp.save()
-    return redirect('payroll_sheet')
+    return redirect('payroll:payroll_sheet')
 
 def delete_employee(request, pk):
     emp = get_object_or_404(Employee, pk=pk)
     emp.delete()
-    return redirect('payroll_sheet')
+    return redirect('payroll:payroll_sheet')
 
 def import_excel(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
@@ -312,8 +361,8 @@ def import_excel(request):
 
     last_week = get_available_weeks()
     if last_week:
-        return redirect(f"/?date={last_week[-1].strftime('%Y-%m-%d')}")
-    return redirect("/")
+        return redirect(f"{reverse('payroll:payroll_sheet')}?date={last_week[-1].strftime('%Y-%m-%d')}")
+    return redirect('payroll:payroll_sheet')
 
 def delete_all_data(request):
     Employee.objects.all().delete()
@@ -352,7 +401,8 @@ def save_attendance(request):
                     adj.save()
                 except: pass
                 
-    return redirect(f"/?date={request.POST.get('current_date', '')}")
+    current_date = request.POST.get('current_date', '')
+    return redirect(f"{reverse('payroll:payroll_sheet')}?date={current_date}")
 
 def export_payroll_excel(start_date, end_date):
     dates = [start_date + datetime.timedelta(days=i) for i in range(7)]

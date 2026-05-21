@@ -7,6 +7,8 @@
                         </th>
                         <th rowspan="2" class="resisable">Họ tên<div class="resizer"></div>
                         </th>
+                        <th rowspan="2" class="resisable">Ngày sinh<div class="resizer"></div>
+                        </th>
                         <th rowspan="2" class="resisable">Nghề<div class="resizer"></div>
                         </th>
                         {% for d in dates %}
@@ -39,6 +41,7 @@
                     <tr>
                         <td>{{ forloop.counter }}</td>
                         <td>{{ row.employee.name }}</td>
+                        <td>{{ row.employee.date_of_birth|date:"d/m/Y"|default:"-" }}</td>
                         <td>{{ row.employee.position }}</td>
                         {% for att in row.daily_attendance %}
                         <td class="hc-col" style="text-align: center;">
@@ -67,7 +70,7 @@
                         <td style="text-align: center;">
                             <div style="display: flex; gap: 0.5rem; justify-content: center;">
                                 <button type="button" class="btn-icon btn-edit"
-                                    onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name }}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
+                                    onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name|escapejs }}', '{% if row.employee.date_of_birth %}{{ row.employee.date_of_birth|date:'Y-m-d' }}{% endif %}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 <a href="{% url 'payroll:delete_employee' row.employee.id %}" class="btn-icon btn-delete"
@@ -79,11 +82,11 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="23"
+                        <td colspan="24"
                             style="text-align: center; padding: 4rem; color: var(--text-muted); font-size: 1rem;">
                             <i class="fas fa-users-slash" style="font-size: 2rem; display: block; margin-bottom: 1rem; opacity: 0.5;"></i>
                             {% if search_query %}
-                            Không tìm thấy nhân viên phù hợp với từ khóa "{{ search_query }}".
+                            Không tìm thấy nhân viên phù hợp với điều kiện tìm kiếm hiện tại.
                             {% else %}
                             Chưa có dữ liệu nhân viên. <br>
                             <a href="#" onclick="document.getElementById('add-worker-modal').style.display='block'"

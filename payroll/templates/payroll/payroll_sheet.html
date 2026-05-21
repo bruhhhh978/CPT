@@ -28,13 +28,17 @@
         <div style="flex-grow: 1;"></div>
         <form method="GET" class="search-form">
             <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+            <select name="search_type" class="form-input search-type-select">
+                <option value="name" {% if search_type == 'name' %}selected{% endif %}>Tìm theo tên</option>
+                <option value="dob" {% if search_type == 'dob' %}selected{% endif %}>Tìm theo ngày sinh</option>
+            </select>
             <div class="search-input-wrap">
                 <i class="fas fa-search"></i>
-                <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm nhân viên theo tên" class="search-input">
+                <input type="text" name="q" value="{{ search_query }}" placeholder="Nhập thông tin" class="search-input">
             </div>
             <button type="submit" class="btn btn-outline">Tìm</button>
             {% if search_query %}
-            <a href="?date={{ start_date|date:'Y-m-d' }}" class="btn btn-outline">Xóa lọc</a>
+            <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}" class="btn btn-outline">Xóa lọc</a>
             {% endif %}
         </form>
         <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
@@ -43,10 +47,10 @@
         <button onclick="document.getElementById('import-excel-modal').style.display='block'" class="btn btn-outline">
             <i class="fas fa-file-import"></i> Nhập Excel
         </button>
-        <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
+        <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
             <i class="fas fa-chart-column"></i> Xem thống kê
         </a>
-        <a href="?date={{ start_date|date:'Y-m-d' }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
+        <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
             <i class="fas fa-file-excel"></i> Xuất Excel
         </a>
         <a href="{% url 'payroll:delete_all_data' %}" class="btn" style="background: #ef4444; color: white;"
@@ -83,6 +87,10 @@
             <div class="form-group">
                 <label>Họ và tên</label>
                 <input type="text" name="name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Ngày sinh</label>
+                <input type="date" name="date_of_birth" class="form-input">
             </div>
             <div class="form-group">
                 <label>Nghề / Chức vụ</label>
@@ -132,11 +140,15 @@
             <button onclick="document.getElementById('edit-worker-modal').style.display='none'" class="btn btn-outline"
                 style="padding: 0.25rem 0.5rem;">&times;</button>
         </div>
-        <form id="edit-worker-form" method="POST">
+        <form id="edit-worker-form" method="POST" data-action-template="{% url 'payroll:edit_employee' 0 %}">
             {% csrf_token %}
             <div class="form-group">
                 <label>Họ và tên</label>
                 <input type="text" name="name" id="edit-name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Ngày sinh</label>
+                <input type="date" name="date_of_birth" id="edit-date-of-birth" class="form-input">
             </div>
             <div class="form-group">
                 <label>Nghề / Chức vụ</label>
@@ -156,15 +168,17 @@
 </div>
 
 <script>
-    function openEditModal(id, name, position, wage) {
+    function openEditModal(id, name, dateOfBirth, position, wage) {
         const modal = document.getElementById('edit-worker-modal');
         const form = document.getElementById('edit-worker-form');
+        const actionTemplate = form.dataset.actionTemplate;
 
         document.getElementById('edit-name').value = name;
+        document.getElementById('edit-date-of-birth').value = dateOfBirth || '';
         document.getElementById('edit-position').value = position;
         document.getElementById('edit-wage').value = wage;
 
-        form.action = `/edit-employee/${id}/`;
+        form.action = actionTemplate.replace('/0/', `/${id}/`);
         modal.style.display = 'block';
     }
 
@@ -211,8 +225,14 @@
 </script>
 
 <script>
+function buildWeekUrl(date) {
+    const params = new URLSearchParams(window.location.search);
+    params.set('date', date);
+    return `?${params.toString()}`;
+}
+
 function changeWeek(date) {
-    const url = `?date=${date}`;
+    const url = buildWeekUrl(date);
     fetch(url, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
