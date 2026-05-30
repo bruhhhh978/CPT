@@ -1,8 +1,10 @@
 from django.urls import path
 from . import views
 
+app_name='payroll'
 urlpatterns = [
     path('', views.payroll_sheet, name='payroll_sheet'),
+    path('sheet/', views.payroll_sheet, name='payroll_sheet_alias'),
     path('statistics/', views.payroll_statistics, name='payroll_statistics'),
     path('add-employee/', views.add_employee, name='add_employee'),
     path('edit-employee/<int:pk>/', views.edit_employee, name='edit_employee'),

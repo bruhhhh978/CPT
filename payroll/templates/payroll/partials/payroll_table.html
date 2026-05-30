@@ -1,0 +1,100 @@
+{% load humanize %}
+        <div class="table-container payroll-table-wrap">
+            <table class="payroll-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="resisable">STT<div class="resizer"></div>
+                        </th>
+                        <th rowspan="2" class="resisable">Họ tên<div class="resizer"></div>
+                        </th>
+                        <th rowspan="2" class="resisable">Ngày sinh<div class="resizer"></div>
+                        </th>
+                        <th rowspan="2" class="resisable">Nghề<div class="resizer"></div>
+                        </th>
+                        {% for d in dates %}
+                        <th colspan="2" style="text-align: center;" class="resisable">
+                            {{ d|date:"D d/m" }}
+                            <div class="resizer"></div>
+                        </th>
+                        {% endfor %}
+                        <th rowspan="2" class="resisable">Tổng HC<div class="resizer"></div>
+                        </th>
+                        <th rowspan="2" class="resisable">Tổng TC<div class="resizer"></div>
+                        </th>
+                        <th rowspan="2" class="resisable">Lương ngày<div class="resizer"></div>
+                        </th>
+                        <th rowspan="2" class="resisable">Tăng/Giảm<div class="resizer"></div>
+                        </th>
+                        <th rowspan="2" class="resisable">Tổng lãnh<div class="resizer"></div>
+                        </th>
+                        <th rowspan="2">Thao tác</th>
+                    </tr>
+                    <tr>
+                        {% for d in dates %}
+                        <th style="font-size: 0.7rem; text-align: center;">HC</th>
+                        <th style="font-size: 0.7rem; text-align: center;">TC</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in payroll_data %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ row.employee.name }}</td>
+                        <td>{{ row.employee.date_of_birth|date:"d/m/Y"|default:"-" }}</td>
+                        <td>{{ row.employee.position }}</td>
+                        {% for att in row.daily_attendance %}
+                        <td class="hc-col" style="text-align: center;">
+                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
+                                value="{{ att.hc_symbol }}" class="att-input">
+                        </td>
+                        <td class="tc-col" style="text-align: center;">
+                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
+                                value="{{ att.tc_symbol }}" class="att-input">
+                        </td>
+                        {% endfor %}
+                        <td style="text-align: center; font-weight: bold;">{{ row.total_hc }}</td>
+                        <td style="text-align: center; font-weight: bold;">{{ row.total_tc }}</td>
+                        <td class="wage" style="text-align: right; color: var(--warning); font-weight: 600;">
+                            {{ row.employee.daily_wage|floatformat:0|intcomma }} đ
+                        </td>
+                        <td style="text-align: right;">
+                            <input type="number"
+                                name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
+                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input">
+                        </td>
+                        <td class="total-col"
+                            style="text-align: right; font-weight: 800; color: var(--success); font-size: 0.85rem;">
+                            {{ row.total_pay|floatformat:0|intcomma }} đ
+                        </td>
+                        <td style="text-align: center;">
+                            <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                                <button type="button" class="btn-icon btn-edit"
+                                    onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name|escapejs }}', '{% if row.employee.date_of_birth %}{{ row.employee.date_of_birth|date:'Y-m-d' }}{% endif %}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <a href="{% url 'payroll:delete_employee' row.employee.id %}" class="btn-icon btn-delete"
+                                    onclick="return confirm('Bạn có chắc chắn muốn xóa nhân viên này?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="24"
+                            style="text-align: center; padding: 4rem; color: var(--text-muted); font-size: 1rem;">
+                            <i class="fas fa-users-slash" style="font-size: 2rem; display: block; margin-bottom: 1rem; opacity: 0.5;"></i>
+                            {% if search_query %}
+                            Không tìm thấy nhân viên phù hợp với điều kiện tìm kiếm hiện tại.
+                            {% else %}
+                            Chưa có dữ liệu nhân viên. <br>
+                            <a href="#" onclick="document.getElementById('add-worker-modal').style.display='block'"
+                                style="color: var(--primary); font-weight: bold; text-decoration: underline;">Thêm nhân viên ngay</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>

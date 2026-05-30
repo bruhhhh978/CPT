@@ -3,8 +3,9 @@ from .models import Employee, Attendance, Adjustment
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ('name', 'position', 'daily_wage')
+    list_display = ('name', 'date_of_birth', 'position', 'daily_wage')
     search_fields = ('name',)
+    list_filter = ('date_of_birth', 'position')
 
 @admin.register(Attendance)
 class AttendanceAdmin(admin.ModelAdmin):
