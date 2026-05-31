@@ -2,530 +2,544 @@
 {% load humanize %}
 
 {% block content %}
-<!-- Flatpickr CSS & JS (Tiếng Việt) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
 
+<style>
+.toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 1.25rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+/* Date group pill */
+.date-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    flex-shrink: 0;
+    height: 36px;
+    box-sizing: border-box;
+}
+.date-pill select,
+.date-pill input[type="text"] {
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    font-size: 0.83rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    padding: 0;
+    max-width: 90px;
+}
+.date-pill input[type="text"] {
+    font-weight: 400;
+    max-width: 80px;
+}
+.date-range-tag {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    background: var(--border);
+    border-radius: 999px;
+    padding: 1px 7px;
+    white-space: nowrap;
+    display: inline-block;
+}
+.week-select-pill {
+    max-width: 170px;
+    font-size: 0.8rem !important;
+    font-weight: 400 !important;
+}
+.sep {
+    width: 1px;
+    height: 24px;
+    background: var(--border);
+    flex-shrink: 0;
+    margin: 0 2px;
+}
+
+/* Icon nav buttons */
+.nav-btn {
+    width: 30px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--glass);
+    color: var(--text-muted);
+    text-decoration: none;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    transition: background 0.15s, color 0.15s;
+}
+.nav-btn:hover {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+
+/* Search inside toolbar */
+.toolbar-search {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+}
+.toolbar-search select {
+    font-size: 0.8rem;
+    padding: 0 8px;
+    height: 36px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--glass);
+    color: var(--text-main);
+    flex-shrink: 0;
+}
+.toolbar-search .search-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 0 10px;
+    height: 36px;
+    background: var(--glass);
+    flex: 1;
+    min-width: 100px;
+}
+.toolbar-search .search-box i {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+.toolbar-search .search-box input {
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 0.83rem;
+    color: var(--text-main);
+    width: 100%;
+}
+
+/* Action buttons */
+.toolbar-row .btn {
+    height: 36px;
+    padding: 0 11px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    box-sizing: border-box;
+}
+.btn-danger {
+    background: #ef4444;
+    color: #fff !important;
+    border-color: #ef4444 !important;
+}
+.btn-danger:hover { background: #dc2626; border-color: #dc2626 !important; }
+
+/* Preserved styles for table/modal/form */
+.btn-lg { padding: 1rem 3rem; }
+.form-footer { margin-top: 1.5rem; display: flex; justify-content: flex-end; }
+.payroll-form { width: 100%; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.modal-header h2 { font-size: 1.25rem; margin: 0; }
+.btn-close { padding: 0.25rem 0.5rem !important; background: none !important; border: none !important; color: var(--text-main); font-size: 1.5rem; cursor: pointer; }
+.form-hint { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; }
+.empty-state { text-align: center; padding: 4rem !important; color: var(--text-muted); }
+.empty-state i { font-size: 2rem; display: block; margin-bottom: 1rem; opacity: 0.5; }
+.empty-state a { color: var(--primary); font-weight: bold; text-decoration: underline; }
+.action-group { display: flex; gap: 0.5rem; justify-content: center; }
+</style>
+
 <div class="card">
-    <div class="controls">
+    <div class="toolbar-row">
 
-        <div class="date-nav"
-            style="display: flex; align-items: center; gap: 0.75rem; background: var(--glass); padding: 0.4rem 1rem; border-radius: 0.5rem; border: 1px solid var(--border);">
-            <select id="view-type-select"
-                style="padding: 0.3rem 0.6rem; font-weight: 600; cursor: pointer; background: transparent; border: none; border-right: 1px solid var(--border); color: var(--text-main); font-size: 0.8rem; outline: none; margin-right: 0.5rem;">
-                <option value="week" {% if view_type=='week' %}selected{% endif %}>Tuần</option>
-                <option value="month" {% if view_type=='month' %}selected{% endif %}>Tháng</option>
-            </select>
+    <!-- 1. View type + date picker -->
+    <div class="date-pill">
+        <select id="view-type-select">
+            <option value="week" {% if view_type == 'week' %}selected{% endif %}>Tuần</option>
+            <option value="month" {% if view_type == 'month' %}selected{% endif %}>Tháng</option>
+        </select>
 
-            <div id="week-picker-wrapper"
-                style="display: {% if view_type == 'week' %}flex{% else %}none{% endif %}; align-items: center; gap: 0.5rem;">
-                <input type="text" id="week-date-picker" value="{{ target_date|date:'d/m/Y' }}"
-                    style="background: transparent; border: none; color: var(--primary); font-weight: 700; font-size: 0.8rem; cursor: pointer; outline: none; width: 85px;">
-                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; white-space: nowrap;">({{
-                    start_date|date:"d/m" }} - {{ end_date|date:"d/m" }})</span>
-            </div>
-
-            <div id="month-picker-wrapper"
-                style="display: {% if view_type == 'month' %}flex{% else %}none{% endif %}; align-items: center; gap: 0.25rem;">
-                <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">Tháng:</span>
-                <select id="month-select"
-                    style="background: transparent; border: none; color: var(--primary); font-weight: 700; font-size: 0.8rem; cursor: pointer; outline: none; padding: 0.1rem 0.3rem;">
-                    <option value="01" {% if target_date|date:'m'=='01' %}selected{% endif %}>1</option>
-                    <option value="02" {% if target_date|date:'m'=='02' %}selected{% endif %}>2</option>
-                    <option value="03" {% if target_date|date:'m'=='03' %}selected{% endif %}>3</option>
-                    <option value="04" {% if target_date|date:'m'=='04' %}selected{% endif %}>4</option>
-                    <option value="05" {% if target_date|date:'m'=='05' %}selected{% endif %}>5</option>
-                    <option value="06" {% if target_date|date:'m'=='06' %}selected{% endif %}>6</option>
-                    <option value="07" {% if target_date|date:'m'=='07' %}selected{% endif %}>7</option>
-                    <option value="08" {% if target_date|date:'m'=='08' %}selected{% endif %}>8</option>
-                    <option value="09" {% if target_date|date:'m'=='09' %}selected{% endif %}>9</option>
-                    <option value="10" {% if target_date|date:'m'=='10' %}selected{% endif %}>10</option>
-                    <option value="11" {% if target_date|date:'m'=='11' %}selected{% endif %}>11</option>
-                    <option value="12" {% if target_date|date:'m'=='12' %}selected{% endif %}>12</option>
-                </select>
-                <span
-                    style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-left: 0.25rem;">Năm:</span>
-                <select id="year-select"
-                    style="background: transparent; border: none; color: var(--primary); font-weight: 700; font-size: 0.8rem; cursor: pointer; outline: none; padding: 0.1rem 0.3rem;">
-                    <option value="2024" {% if target_date|date:'Y'=='2024' %}selected{% endif %}>2024</option>
-                    <option value="2025" {% if target_date|date:'Y'=='2025' %}selected{% endif %}>2025</option>
-                    <option value="2026" {% if target_date|date:'Y'=='2026' %}selected{% endif %}>2026</option>
-                    <option value="2027" {% if target_date|date:'Y'=='2027' %}selected{% endif %}>2027</option>
-                    <option value="2028" {% if target_date|date:'Y'=='2028' %}selected{% endif %}>2028</option>
-                    <option value="2029" {% if target_date|date:'Y'=='2029' %}selected{% endif %}>2029</option>
-                    <option value="2030" {% if target_date|date:'Y'=='2030' %}selected{% endif %}>2030</option>
-                </select>
-            </div>
-
-            <div class="date-nav">
-                <a href="#" id="btn-prev" class="btn btn-outline">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
-
-                <select id="week-select" onchange="changeWeek(this.value)"
-                    style="font-weight:bold; padding: 4px 12px; border-radius: 6px; border: 1px solid #ccc; cursor:pointer;">
-                    {% for w in available_weeks %}
-                    <option value="{{ w.date_str }}" {% if w.start==start_date %}selected{% endif %}>
-                        Tuần {{ forloop.counter }}: {{ w.start|date:'d/m' }} - {{ w.end|date:'d/m/Y' }}
-                    </option>
-                    {% endfor %}
-                </select>
-
-                <a href="#" id="btn-next" class="btn btn-outline">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-
-            </div>
-
-            <div style="flex-grow: 1;"></div>
-            <form method="GET" class="search-form">
-                <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
-
-                <input type="hidden" name="view_type" value="{{ view_type }}">
-
-                <select name="search_type" class="form-input search-type-select">
-                    <option value="name" {% if search_type=='name' %}selected{% endif %}>Tìm theo tên</option>
-                    <option value="dob" {% if search_type=='dob' %}selected{% endif %}>Tìm theo ngày sinh</option>
-                </select>
-                >>>>>>> 546a57b376b55cb3e97f288876697db335b826cc
-                <div class="search-input-wrap">
-                    <i class="fas fa-search"></i>
-                    <input type="text" name="q" value="{{ search_query }}" placeholder="Nhập thông tin"
-                        class="search-input">
-                </div>
-                <button type="submit" class="btn btn-outline">Tìm</button>
-                {% if search_query %}
-                <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}" class="btn btn-outline">Xóa
-                    lọc</a>
-                {% endif %}
-            </form>
-            <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
-                <i class="fas fa-user-plus"></i> Thêm người làm
-            </button>
-            <button onclick="document.getElementById('import-excel-modal').style.display='block'"
-                class="btn btn-outline">
-                <i class="fas fa-file-import"></i> Nhập Excel
-            </button>
-            <<<<<<< HEAD <a
-                href="{% url 'payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
-                class="btn btn-outline">
-                <i class="fas fa-chart-column"></i> Xem thống kê
-                </a>
-                <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
-                    class="btn btn-primary">
-                    <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
-                        class="btn btn-outline">
-                        <i class="fas fa-chart-column"></i> Xem thống kê
-                    </a>
-                    <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}"
-                        class="btn btn-primary">
-                        <i class="fas fa-file-excel"></i> Xuất Excel
-                    </a>
-                    <a href="{% url 'payroll:delete_all_data' %}" class="btn" style="background: #ef4444; color: white;"
-                        onclick="return confirm('CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ nhân viên và dữ liệu chấm công. Bạn có chắc chắn không?')">
-                        <i class="fas fa-trash-alt"></i> Xóa tất cả
-                    </a>
+        <div id="week-picker-wrapper" style="display:{% if view_type == 'week' %}flex{% else %}none{% endif %};align-items:center;gap:4px;">
+            <input type="text" id="week-date-picker" value="{{ target_date|date:'d/m/Y' }}" readonly style="width:78px;">
+            <span class="date-range-tag">{{ start_date|date:"d/m" }}–{{ end_date|date:"d/m" }}</span>
         </div>
 
-        <form action="{% url 'payroll:save_attendance' %}" method="POST">
-            {% csrf_token %}
-            <<<<<<< HEAD <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
-                <input type="hidden" name="view_type" value="{{ view_type }}">
-                <input type="hidden" name="q" value="{{ search_query }}">
-                <div class="table-container payroll-table-wrap">
-                    <table class="payroll-table">
-                        <colgroup>
-                            <col class="stt-col">
-                            <col class="name-col">
-                            <col class="position-col">
-                            {% for d in dates %}
-                            <col class="hc-col">
-                            <col class="tc-col">
-                            {% endfor %}
-                            <col class="total-hc-col">
-                            <col class="total-tc-col">
-                            <col class="wage-col">
-                            <col class="adj-col">
-                            <col class="total-pay-col">
-                            <col class="actions-col">
-                        </colgroup>
-                        <thead>
-                            <tr>
-                                <th rowspan="2" class="resisable stt-col">STT<div class="resizer"></div>
-                                </th>
-                                <th rowspan="2" class="resisable name-col">Họ tên<div class="resizer"></div>
-                                </th>
-                                <th rowspan="2" class="resisable position-col">Nghề<div class="resizer"></div>
-                                </th>
-                                {% for d in dates %}
-                                <th colspan="2" style="text-align: center;" class="resisable">
-                                    {{ d|date:"D d/m" }}
-                                    <div class="resizer"></div>
-                                </th>
-                                {% endfor %}
-                                <th rowspan="2" class="resisable total-hc-col">Tổng HC<div class="resizer"></div>
-                                </th>
-                                <th rowspan="2" class="resisable total-tc-col">Tổng TC<div class="resizer"></div>
-                                </th>
-                                <th rowspan="2" class="resisable wage-col">Lương ngày<div class="resizer"></div>
-                                </th>
-                                <th rowspan="2" class="resisable adj-col">Tăng/Giảm<div class="resizer"></div>
-                                </th>
-                                <th rowspan="2" class="resisable total-pay-col">Tổng lãnh<div class="resizer"></div>
-                                </th>
-                                <th rowspan="2" class="actions-col">Thao tác</th>
-                            </tr>
-                            <tr>
-                                {% for d in dates %}
-                                <th class="hc-col" style="font-size: 0.7rem; text-align: center;">HC</th>
-                                <th class="tc-col" style="font-size: 0.7rem; text-align: center;">TC</th>
-                                {% endfor %}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in payroll_data %}
-                            <tr>
-                                <td class="stt-col">{{ forloop.counter }}</td>
-                                <td class="name-col">{{ row.employee.name }}</td>
-                                <td class="position-col">{{ row.employee.position }}</td>
-                                {% for att in row.daily_attendance %}
-                                <td class="hc-col" style="text-align: center;">
-                                    <input type="checkbox"
-                                        name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc" {% if
-                                        att.hc_symbol=='x' or att.hc_symbol=='1' or att.hc_symbol=='1.0' %}checked{%
-                                        endif %} class="att-checkbox">
-                                </td>
-                                <td class="tc-col" style="text-align: center;">
-                                    <input type="checkbox"
-                                        name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc" {% if
-                                        att.tc_symbol=='x' or att.tc_symbol=='1' or att.tc_symbol=='1.0' %}checked{%
-                                        endif %} class="att-checkbox">
-                                </td>
-                                {% endfor %}
-                                <td class="total-hc-col">{{ row.total_hc }}</td>
-                                <td class="total-tc-col">{{ row.total_tc }}</td>
-                                <td class="wage wage-col">
-                                    {{ row.employee.daily_wage|floatformat:0|intcomma }} đ
-                                </td>
-                                <td class="adj-col">
-                                    <input type="number"
-                                        name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
-                                        value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input">
-                                </td>
-                                <td class="total-col total-pay-col"
-                                    style="font-weight: 800; color: var(--success); font-size: 0.85rem;">
-                                    {{ row.total_pay|floatformat:0|intcomma }} đ
-                                </td>
-                                <td class="actions-col">
-                                    <div style="display: flex; gap: 0.5rem; justify-content: center;">
-                                        <button type="button" class="btn-icon btn-edit"
-                                            onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name }}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <a href="{% url 'delete_employee' row.employee.id %}"
-                                            class="btn-icon btn-delete"
-                                            onclick="return confirm('Bạn có chắc chắn muốn xóa nhân viên này?')">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="23"
-                                    style="text-align: center; padding: 4rem; color: var(--text-muted); font-size: 1rem;">
-                                    <i class="fas fa-users-slash"
-                                        style="font-size: 2rem; display: block; margin-bottom: 1rem; opacity: 0.5;"></i>
-                                    {% if search_query %}
-                                    Không tìm thấy nhân viên phù hợp với từ khóa "{{ search_query }}".
-                                    {% else %}
-                                    Chưa có dữ liệu nhân viên. <br>
-                                    <a href="#"
-                                        onclick="document.getElementById('add-worker-modal').style.display='block'"
-                                        style="color: var(--primary); font-weight: bold; text-decoration: underline;">Thêm
-                                        nhân viên ngay</a>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
-                    <div id="payroll-container">
-                        {% include 'payroll/partials/payroll_table.html' %}
-                    </div>
+        <div id="month-picker-wrapper" style="display:{% if view_type == 'month' %}flex{% else %}none{% endif %};align-items:center;gap:4px;">
+            <select id="month-select">
+                <option value="01" {% if current_month == "01" %}selected{% endif %}>Tháng 1</option>
+                <option value="02" {% if current_month == "02" %}selected{% endif %}>Tháng 2</option>
+                <option value="03" {% if current_month == "03" %}selected{% endif %}>Tháng 3</option>
+                <option value="04" {% if current_month == "04" %}selected{% endif %}>Tháng 4</option>
+                <option value="05" {% if current_month == "05" %}selected{% endif %}>Tháng 5</option>
+                <option value="06" {% if current_month == "06" %}selected{% endif %}>Tháng 6</option>
+                <option value="07" {% if current_month == "07" %}selected{% endif %}>Tháng 7</option>
+                <option value="08" {% if current_month == "08" %}selected{% endif %}>Tháng 8</option>
+                <option value="09" {% if current_month == "09" %}selected{% endif %}>Tháng 9</option>
+                <option value="10" {% if current_month == "10" %}selected{% endif %}>Tháng 10</option>
+                <option value="11" {% if current_month == "11" %}selected{% endif %}>Tháng 11</option>
+                <option value="12" {% if current_month == "12" %}selected{% endif %}>Tháng 12</option>
+            </select>
+            <select id="year-select">
+                <option value="2024" {% if target_date|date:'Y' == '2024' %}selected{% endif %}>2024</option>
+                <option value="2025" {% if target_date|date:'Y' == '2025' %}selected{% endif %}>2025</option>
+                <option value="2026" {% if target_date|date:'Y' == '2026' %}selected{% endif %}>2026</option>
+                <option value="2027" {% if target_date|date:'Y' == '2027' %}selected{% endif %}>2027</option>
+                <option value="2028" {% if target_date|date:'Y' == '2028' %}selected{% endif %}>2028</option>
+                <option value="2029" {% if target_date|date:'Y' == '2029' %}selected{% endif %}>2029</option>
+                <option value="2030" {% if target_date|date:'Y' == '2030' %}selected{% endif %}>2030</option>
+            </select>
+        </div>
+    </div>
 
-                    <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
-                        <button type="submit" class="btn btn-primary" style="padding: 1rem 3rem;">
-                            <i class="fas fa-save"></i> LƯU CHẤM CÔNG
-                        </button>
-                    </div>
+    <!-- 2. Week nav (ẩn khi chọn tháng) -->
+    <a href="#" id="btn-prev" class="nav-btn" title="Tuần trước"><i class="fas fa-chevron-left"></i></a>
+    <div class="date-pill" id="week-nav-pill" style="{% if view_type != 'week' %}display:none;{% endif %}padding:0 8px;">
+        <select id="week-select" class="week-select-pill" onchange="changeWeek(this.value)">
+            {% for w in available_weeks %}
+            <option value="{{ w.date_str }}" {% if w.start == start_date %}selected{% endif %}>
+                T{{ forloop.counter }}: {{ w.start|date:'d/m' }} – {{ w.end|date:'d/m' }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <a href="#" id="btn-next" class="nav-btn" title="Tuần sau"><i class="fas fa-chevron-right"></i></a>
+
+    <div class="sep"></div>
+
+    <!-- 3. Search form -->
+    <form method="GET" class="toolbar-search">
+        <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+        <input type="hidden" name="view_type" value="{{ view_type }}">
+        <select name="search_type">
+            <option value="name" {% if search_type == 'name' %}selected{% endif %}>Theo tên</option>
+            <option value="dob" {% if search_type == 'dob' %}selected{% endif %}>Ngày sinh</option>
+        </select>
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Nhập thông tin...">
+        </div>
+        <button type="submit" class="btn btn-outline">Tìm</button>
+        {% if search_query %}
+        <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}" class="btn btn-outline" title="Xóa lọc">✕</a>
+        {% endif %}
+    </form>
+
+    <div class="sep"></div>
+
+    <!-- 4. Action buttons -->
+    <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
+        <i class="fas fa-user-plus"></i> Thêm
+    </button>
+    <button onclick="document.getElementById('import-excel-modal').style.display='block'" class="btn btn-outline">
+        <i class="fas fa-file-import"></i> Nhập Excel
+    </button>
+    <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
+        <i class="fas fa-chart-column"></i> Thống kê
+    </a>
+    <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
+        <i class="fas fa-file-excel"></i> Xuất Excel
+    </a>
+    <a href="{% url 'payroll:delete_all_data' %}" class="btn btn-danger"
+        onclick="return confirm('CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ nhân viên và dữ liệu chấm công. Bạn có chắc chắn không?')">
+        <i class="fas fa-trash-alt"></i> Xóa tất cả
+    </a>
+
+</div>
+
+    <form action="{% url 'payroll:save_attendance' %}" method="POST" class="payroll-form">
+        {% csrf_token %}
+        <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
+        <input type="hidden" name="view_type" value="{{ view_type }}">
+        <input type="hidden" name="q" value="{{ search_query }}">
+
+        <div class="table-container">
+            <table class="payroll-table">
+                <colgroup>
+                    <col class="stt-col">
+                    <col class="name-col">
+                    <col class="position-col">
+                    {% for d in dates %}
+                    <col class="hc-col">
+                    <col class="tc-col">
+                    {% endfor %}
+                    <col class="total-hc-col">
+                    <col class="total-tc-col">
+                    <col class="wage-col">
+                    <col class="adj-col">
+                    <col class="total-pay-col">
+                    <col class="actions-col">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="stt-col">STT</th>
+                        <th rowspan="2" class="name-col">Họ tên</th>
+                        <th rowspan="2" class="position-col">Nghề</th>
+                        {% for d in dates %}
+                        <th colspan="2" class="date-header">{{ d|date:"D d/m" }}</th>
+                        {% endfor %}
+                        <th rowspan="2" class="total-hc-col">Tổng HC</th>
+                        <th rowspan="2" class="total-tc-col">Tổng TC</th>
+                        <th rowspan="2" class="wage-col">Lương ngày</th>
+                        <th rowspan="2" class="adj-col">Tăng/Giảm</th>
+                        <th rowspan="2" class="total-pay-col">Tổng lãnh</th>
+                        <th rowspan="2" class="actions-col">Thao tác</th>
+                    </tr>
+                    <tr>
+                        {% for d in dates %}
+                        <th class="hc-col">HC</th>
+                        <th class="tc-col">TC</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in payroll_data %}
+                    <tr>
+                        <td class="stt-col">{{ forloop.counter }}</td>
+                        <td class="name-col">{{ row.employee.name }}</td>
+                        <td class="position-col">{{ row.employee.position }}</td>
+                        {% for att in row.daily_attendance %}
+                        <td class="hc-col">
+                            <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc" {% if att.hc_symbol == 'x' or att.hc_symbol == '1' or att.hc_symbol == '1.0' %}checked{% endif %}
+                                class="att-checkbox">
+                        </td>
+                        <td class="tc-col">
+                            <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc" {% if att.hc_symbol == 'x' or att.hc_symbol == '1' or att.hc_symbol == '1.0' %}checked{% endif %}
+                                class="att-checkbox">
+                        </td>
+                        {% endfor %}
+                        <td class="total-hc-col">{{ row.total_hc }}</td>
+                        <td class="total-tc-col">{{ row.total_tc }}</td>
+                        <td class="wage-col">{{ row.employee.daily_wage|floatformat:0|intcomma }} đ</td>
+                        <td class="adj-col">
+                            <input type="number"
+                                name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
+                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input">
+                        </td>
+                        <td class="total-pay-col">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
+                        <td class="actions-col">
+                            <div class="action-group">
+                                <button type="button" class="btn-icon btn-edit"
+                                    onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name }}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <a href="{% url 'payroll:delete_employee' row.employee.id %}"
+                                    class="btn-icon btn-delete"
+                                    onclick="return confirm('Bạn có chắc chắn muốn xóa nhân viên này?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="23" class="empty-state">
+                            <i class="fas fa-users-slash"></i>
+                            {% if search_query %}
+                            Không tìm thấy nhân viên phù hợp với từ khóa "{{ search_query }}".
+                            {% else %}
+                            Chưa có dữ liệu nhân viên. <br>
+                            <a href="#" onclick="document.getElementById('add-worker-modal').style.display='block'">
+                                Thêm nhân viên ngay
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="form-footer">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-save"></i> LƯU CHẤM CÔNG
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Modal Thêm Người Làm -->
+<div id="add-worker-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Thêm Người Làm Công</h2>
+            <button onclick="document.getElementById('add-worker-modal').style.display='none'"
+                class="btn btn-close">&times;</button>
+        </div>
+        <form action="{% url 'payroll:add_employee' %}" method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>Họ và tên</label>
+                <input type="text" name="name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Ngày sinh</label>
+                <input type="date" name="date_of_birth" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Nghề / Chức vụ</label>
+                <select name="position" class="form-input">
+                    <option value="Tho">Thợ</option>
+                    <option value="Phu">Phụ</option>
+                    <option value="Cai">Cai</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Lương ngày (VNĐ)</label>
+                <input type="number" name="daily_wage" required class="form-input" placeholder="Ví dụ: 400000">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">TẠO NGƯỜI LÀM</button>
         </form>
     </div>
+</div>
 
-    <!-- Modal Thêm Người Làm -->
-    <div id="add-worker-modal" class="modal">
-        <div class="modal-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2 style="font-size: 1.25rem;">Thêm Người Làm Công</h2>
-                <button onclick="document.getElementById('add-worker-modal').style.display='none'"
-                    class="btn btn-outline" style="padding: 0.25rem 0.5rem;">&times;</button>
-            </div>
-            <form action="{% url 'payroll:add_employee' %}" method="POST">
-                {% csrf_token %}
-                <div class="form-group">
-                    <label>Họ và tên</label>
-                    <input type="text" name="name" required class="form-input">
-                </div>
-                <div class="form-group">
-                    <label>Ngày sinh</label>
-                    <input type="date" name="date_of_birth" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label>Nghề / Chức vụ</label>
-                    <select name="position" class="form-input">
-                        <option value="Tho">Thợ</option>
-                        <option value="Phu">Phụ</option>
-                        <option value="Cai">Cai</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Lương ngày (VNĐ)</label>
-                    <input type="number" name="daily_wage" required class="form-input" placeholder="Ví dụ: 400000">
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">TẠO NGƯỜI
-                    LÀM</button>
-            </form>
+<!-- Modal Nhập Excel -->
+<div id="import-excel-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nhập Dữ Liệu Từ Excel</h2>
+            <button onclick="document.getElementById('import-excel-modal').style.display='none'"
+                class="btn btn-close">&times;</button>
         </div>
-    </div>
-
-    <!-- Modal Nhập Excel -->
-    <div id="import-excel-modal" class="modal">
-        <div class="modal-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2 style="font-size: 1.25rem;">Nhập Dữ Liệu Từ Excel</h2>
-                <button onclick="document.getElementById('import-excel-modal').style.display='none'"
-                    class="btn btn-outline" style="padding: 0.25rem 0.5rem;">&times;</button>
+        <form action="{% url 'payroll:import_excel' %}" method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
+            <div class="form-group">
+                <label>Chọn file Excel (.xlsx)</label>
+                <input type="file" name="excel_file" accept=".xlsx" required class="form-input">
             </div>
-            <form action="{% url 'payroll:import_excel' %}" method="POST" enctype="multipart/form-data">
-                {% csrf_token %}
-                <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
-                <div class="form-group">
-                    <label>Chọn file Excel (.xlsx)</label>
-                    <input type="file" name="excel_file" accept=".xlsx" required class="form-input">
-                </div>
-                <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem;">
-                    * File Excel phải đúng định dạng đã xuất từ hệ thống.
-                </p>
-                <button type="submit" class="btn btn-primary" style="width: 100%;">TẢI LÊN & CẬP NHẬT</button>
-            </form>
-        </div>
+            <p class="form-hint">* File Excel phải đúng định dạng đã xuất từ hệ thống.</p>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">TẢI LÊN & CẬP NHẬT</button>
+        </form>
     </div>
+</div>
 
-    <!-- Modal Chỉnh Sửa -->
-    <div id="edit-worker-modal" class="modal">
-        <div class="modal-content">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h2 style="font-size: 1.25rem;">Chỉnh Sửa Thông Tin</h2>
-                <button onclick="document.getElementById('edit-worker-modal').style.display='none'"
-                    class="btn btn-outline" style="padding: 0.25rem 0.5rem;">&times;</button>
+<!-- Modal Chỉnh Sửa -->
+<div id="edit-worker-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Chỉnh Sửa Thông Tin</h2>
+            <button onclick="document.getElementById('edit-worker-modal').style.display='none'"
+                class="btn btn-close">&times;</button>
+        </div>
+        <form id="edit-worker-form" method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>Họ và tên</label>
+                <input type="text" name="name" id="edit-name" required class="form-input">
             </div>
-            <form id="edit-worker-form" method="POST" data-action-template="{% url 'payroll:edit_employee' 0 %}">
-                {% csrf_token %}
-                <div class="form-group">
-                    <label>Họ và tên</label>
-                    <input type="text" name="name" id="edit-name" required class="form-input">
-                </div>
-                <div class="form-group">
-                    <label>Ngày sinh</label>
-                    <input type="date" name="date_of_birth" id="edit-date-of-birth" class="form-input">
-                </div>
-                <div class="form-group">
-                    <label>Nghề / Chức vụ</label>
-                    <select name="position" id="edit-position" class="form-input">
-                        <option value="Tho">Thợ</option>
-                        <option value="Phu">Phụ</option>
-                        <option value="Cai">Cai</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Lương ngày (VNĐ)</label>
-                    <input type="number" name="daily_wage" id="edit-wage" required class="form-input">
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">CẬP NHẬT</button>
-            </form>
-        </div>
+            <div class="form-group">
+                <label>Ngày sinh</label>
+                <input type="date" name="date_of_birth" id="edit-date-of-birth" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Nghề / Chức vụ</label>
+                <select name="position" id="edit-position" class="form-input">
+                    <option value="Tho">Thợ</option>
+                    <option value="Phu">Phụ</option>
+                    <option value="Cai">Cai</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Lương ngày (VNĐ)</label>
+                <input type="number" name="daily_wage" id="edit-wage" required class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">CẬP NHẬT</button>
+        </form>
     </div>
+</div>
 
-    <script>
-        function openEditModal(id, name, dateOfBirth, position, wage) {
-            const modal = document.getElementById('edit-worker-modal');
-            const form = document.getElementById('edit-worker-form');
-            const actionTemplate = form.dataset.actionTemplate;
+<script>
+    function openEditModal(id, name, position, wage) {
+        document.getElementById('edit-name').value = name;
+        document.getElementById('edit-position').value = position;
+        document.getElementById('edit-wage').value = wage;
+        document.getElementById('edit-worker-form').action = '{% url "payroll:edit_employee" 0 %}'.replace('0', id);
+        document.getElementById('edit-worker-modal').style.display = 'block';
+    }
 
-            document.getElementById('edit-name').value = name;
-            document.getElementById('edit-date-of-birth').value = dateOfBirth || '';
-            document.getElementById('edit-position').value = position;
-            document.getElementById('edit-wage').value = wage;
+    function changeWeek(dateStr) {
+        window.location.href = '?date=' + dateStr + '&view_type=week';
+    }
 
-            form.action = actionTemplate.replace('/0/', `/${id}/`);
-            modal.style.display = 'block';
+    // Close modals when clicking outside
+    window.onclick = function (event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
         }
+    }
 
-        document.querySelectorAll(".resiser, .resizer").forEach(resizer => {
-            let x = 0;
-            let w = 0;
+    // View type change
+    document.getElementById('view-type-select').addEventListener('change', function () {
+        const viewType = this.value;
+        const weekWrapper = document.getElementById('week-picker-wrapper');
+        const monthWrapper = document.getElementById('month-picker-wrapper');
+        const weekNav = document.querySelector('.week-nav');
 
-            const mouseDownHandler = function (e) {
-                x = e.clientX;
-                const styles = window.getComputedStyle(resizer.parentElement);
-                w = parseInt(styles.width, 10);
-
-                document.addEventListener("mousemove", mouseMoveHandler);
-                document.addEventListener("mouseup", mouseUpHandler);
-                resizer.classList.add("resizing");
-            };
-
-            const mouseMoveHandler = function (e) {
-                const dx = e.clientX - x;
-                resizer.parentElement.style.width = `${w + dx}px`;
-                resizer.parentElement.style.minWidth = `${w + dx}px`;
-            };
-
-            const mouseUpHandler = function () {
-                document.removeEventListener("mousemove", mouseMoveHandler);
-                document.removeEventListener("mouseup", mouseUpHandler);
-                resizer.classList.remove("resizing");
-            };
-
-            resizer.addEventListener("mousedown", mouseDownHandler);
-        });
-        // Xử lý chuyển đổi loại view (Tuần/Tháng) và thay đổi ngày/tháng
-        const viewTypeSelect = document.getElementById('view-type-select');
-        const weekDatePicker = document.getElementById('week-date-picker');
-        const monthSelect = document.getElementById('month-select');
-        const yearSelect = document.getElementById('year-select');
-
-        function reloadWithParams(newParams) {
-            const urlParams = new URLSearchParams(window.location.search);
-            for (const [key, value] of Object.entries(newParams)) {
-                if (value === null) {
-                    urlParams.delete(key);
-                } else {
-                    urlParams.set(key, value);
-                }
-            }
-            window.location.search = urlParams.toString();
+        if (viewType === 'week') {
+            weekWrapper.style.display = 'flex';
+            monthWrapper.style.display = 'none';
+            weekNav.style.display = 'flex';
+        } else {
+            weekWrapper.style.display = 'none';
+            monthWrapper.style.display = 'flex';
+            weekNav.style.display = 'none';
         }
+    });
 
-        // Khởi tạo Flatpickr cho ô chọn ngày của tuần
-        if (weekDatePicker) {
-            flatpickr("#week-date-picker", {
-                locale: "vn",
-                dateFormat: "d/m/Y",
-                onChange: function (selectedDates, dateStr) {
-                    const parts = dateStr.split('/');
-                    if (parts.length === 3) {
-                        const formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                        reloadWithParams({ date: formattedDate });
-                    }
-                }
-            });
+    // Month/Year selection
+    document.getElementById('month-select').addEventListener('change', updateMonthView);
+    document.getElementById('year-select').addEventListener('change', updateMonthView);
+
+    function updateMonthView() {
+        const month = document.getElementById('month-select').value;
+        const year = document.getElementById('year-select').value;
+        window.location.href = '?date=' + year + '-' + month + '-01&view_type=month';
+    }
+
+    // Week navigation
+    document.getElementById('btn-prev').addEventListener('click', function (e) {
+        e.preventDefault();
+        const weekSelect = document.getElementById('week-select');
+        if (weekSelect.selectedIndex > 0) {
+            weekSelect.selectedIndex--;
+            changeWeek(weekSelect.value);
         }
+    });
 
-        if (viewTypeSelect) {
-            viewTypeSelect.onchange = function () {
-                const view = this.value;
-                if (view === 'week') {
-                    const parts = weekDatePicker.value.split('/');
-                    const formattedDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : weekDatePicker.value;
-                    reloadWithParams({ view_type: 'week', date: formattedDate });
-                } else {
-                    reloadWithParams({ view_type: 'month', date: `${yearSelect.value}-${monthSelect.value}-01` });
-                }
-            };
+    document.getElementById('btn-next').addEventListener('click', function (e) {
+        e.preventDefault();
+        const weekSelect = document.getElementById('week-select');
+        if (weekSelect.selectedIndex < weekSelect.options.length - 1) {
+            weekSelect.selectedIndex++;
+            changeWeek(weekSelect.value);
         }
+    });
+    document.getElementById('view-type-select').addEventListener('change', function() {
+    const isWeek = this.value === 'week';
+    document.getElementById('week-picker-wrapper').style.display = isWeek ? 'flex' : 'none';
+    document.getElementById('month-picker-wrapper').style.display = isWeek ? 'none' : 'flex';
+    document.getElementById('week-nav-pill').style.display = isWeek ? 'flex' : 'none';
+    document.getElementById('btn-prev').style.display = isWeek ? 'flex' : 'none';
+    document.getElementById('btn-next').style.display = isWeek ? 'flex' : 'none';
+});
+</script>
 
-        function handleMonthYearChange() {
-            reloadWithParams({ date: `${yearSelect.value}-${monthSelect.value}-01` });
-        }
-
-        if (monthSelect) monthSelect.onchange = handleMonthYearChange;
-        if (yearSelect) yearSelect.onchange = handleMonthYearChange;
-
-        // Đóng modal khi click ra ngoài
-
-        window.onclick = function (event) {
-            if (event.target == document.getElementById('add-worker-modal')) {
-                document.getElementById('add-worker-modal').style.display = 'none';
-            }
-            if (event.target == document.getElementById('edit-worker-modal')) {
-                document.getElementById('edit-worker-modal').style.display = 'none';
-            }
-            if (event.target == document.getElementById('import-excel-modal')) {
-                document.getElementById('import-excel-modal').style.display = 'none';
-            }
-        }
-    </script>
-
-    <script>
-        function buildWeekUrl(date) {
-            const params = new URLSearchParams(window.location.search);
-            params.set('date', date);
-            return `?${params.toString()}`;
-        }
-
-        function changeWeek(date) {
-            const url = buildWeekUrl(date);
-            fetch(url, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            })
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('payroll-container').innerHTML = data.html;
-                    document.getElementById('week-select').value = date;
-                    updateNavButtons();
-                    window.history.pushState({}, '', url);
-                })
-        }
-
-        function getAvailableWeeks() {
-            return Array.from(document.getElementById('week-select').options).map(opt => opt.value);
-        }
-
-        function getCurrentWeek() {
-            return document.getElementById('week-select').value;
-        }
-
-        function updateNavButtons() {
-            const weeks = getAvailableWeeks();
-            const idx = weeks.indexOf(getCurrentWeek());
-
-            const btnPrev = document.getElementById('btn-prev');
-            const btnNext = document.getElementById('btn-next');
-
-            btnPrev.style.opacity = idx <= 0 ? '0.3' : '1';
-            btnPrev.style.pointerEvents = idx <= 0 ? 'none' : 'auto';
-
-            btnNext.style.opacity = idx >= weeks.length - 1 ? '0.3' : '1';
-            btnNext.style.pointerEvents = idx >= weeks.length - 1 ? 'none' : 'auto';
-        }
-
-        document.getElementById('btn-prev').addEventListener('click', function (e) {
-            e.preventDefault();
-            const weeks = getAvailableWeeks();
-            const idx = weeks.indexOf(getCurrentWeek());
-            if (idx > 0) changeWeek(weeks[idx - 1]);
-        });
-
-        document.getElementById('btn-next').addEventListener('click', function (e) {
-            e.preventDefault();
-            const weeks = getAvailableWeeks();
-            const idx = weeks.indexOf(getCurrentWeek());
-            if (idx < weeks.length - 1) changeWeek(weeks[idx + 1]);
-        });
-
-        updateNavButtons();
-    </script>
-    {% endblock %}
+{% endblock %}
