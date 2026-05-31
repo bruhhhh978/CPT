@@ -145,7 +145,7 @@ def payroll_sheet(request):
     if request.GET.get('export') == 'excel':
         return export_payroll_excel(dates, start_date, end_date, view_type)
 
-    employees = get_filtered_employees(search_query, search_type)
+    employees = get_filtered_employees(search_query)
     payroll_data = build_weekly_payroll_data(employees, dates)
     available_weeks = [
         {

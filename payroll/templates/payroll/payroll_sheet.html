@@ -14,8 +14,13 @@
             style="display: flex; align-items: center; gap: 0.75rem; background: var(--glass); padding: 0.4rem 1rem; border-radius: 0.5rem; border: 1px solid var(--border);">
             <select id="view-type-select"
                 style="padding: 0.3rem 0.6rem; font-weight: 600; cursor: pointer; background: transparent; border: none; border-right: 1px solid var(--border); color: var(--text-main); font-size: 0.8rem; outline: none; margin-right: 0.5rem;">
-                <option value="week" {% if view_type=='week' %}selected{% endif %}>Tuần</option>
-                <option value="month" {% if view_type=='month' %}selected{% endif %}>Tháng</option>
+                <option value="week" {% if view_type=='week' %}selected{% endif %}>
+                    Tuần
+                </option>
+
+                <option value="month" {% if view_type=='month' %}selected{% endif %}>
+                    Tháng
+                </option>
             </select>
 
             <div id="week-picker-wrapper"
