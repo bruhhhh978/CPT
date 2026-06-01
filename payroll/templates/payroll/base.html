@@ -46,6 +46,29 @@
             {% block content %}{% endblock %}
         </main>
     </div>
+    <script>
+        (function () {
+            const root = document.documentElement;
+            const container = document.querySelector('.container');
+            const minWidth = parseFloat(getComputedStyle(root).getPropertyValue('--page-min-width')) || 1180;
+
+            function fitPageToViewport() {
+                if (!container) return;
+
+                const scale = window.innerWidth < minWidth ? window.innerWidth / minWidth : 1;
+                root.style.setProperty('--page-scale', scale.toString());
+                root.style.setProperty('--scaled-page-height', `${container.scrollHeight * scale}px`);
+            }
+
+            window.addEventListener('resize', fitPageToViewport);
+            window.addEventListener('load', fitPageToViewport);
+            fitPageToViewport();
+
+            if ('ResizeObserver' in window && container) {
+                new ResizeObserver(fitPageToViewport).observe(container);
+            }
+        })();
+    </script>
 </body>
 
 </html>
