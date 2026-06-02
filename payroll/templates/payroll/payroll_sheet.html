@@ -311,29 +311,34 @@
                 </thead>
                 <tbody>
                     {% for row in payroll_data %}
-                    <tr>
+                    <tr class="payroll-row" data-wage="{{ row.employee.daily_wage|floatformat:0 }}">
                         <td class="stt-col">{{ forloop.counter }}</td>
                         <td class="name-col">{{ row.employee.name }}</td>
                         <td class="position-col">{{ row.employee.position }}</td>
                         {% for att in row.daily_attendance %}
                         <td class="hc-col">
                             <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc" {% if att.hc_symbol == 'x' or att.hc_symbol == '1' or att.hc_symbol == '1.0' %}checked{% endif %}
-                                class="att-checkbox">
+                                class="att-checkbox att-hc">
                         </td>
                         <td class="tc-col">
-                            <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc" {% if att.hc_symbol == 'x' or att.hc_symbol == '1' or att.hc_symbol == '1.0' %}checked{% endif %}
-                                class="att-checkbox">
+                            <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc" {% if att.tc_symbol == '1' or att.tc_symbol == '1.0' %}checked{% endif %}
+                                class="att-checkbox att-tc">
                         </td>
                         {% endfor %}
-                        <td class="total-hc-col">{{ row.total_hc }}</td>
-                        <td class="total-tc-col">{{ row.total_tc }}</td>
-                        <td class="wage-col">{{ row.employee.daily_wage|floatformat:0|intcomma }} đ</td>
+                            <!-- Tổng HC -->
+                            <td class="total-hc-col cell-total-hc">{{ row.total_hc }}</td>
+
+                            <!-- Tổng TC -->
+                            <td class="total-tc-col cell-total-tc">{{ row.total_tc }}</td>
+
+                            <!-- Lương ngày -->
+                            <td class="wage-col">{{ row.employee.daily_wage|floatformat:0|intcomma }} đ</td>
                         <td class="adj-col">
-                            <input type="number"
+                            <input type="number" 
                                 name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
-                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input">
+                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input adj-input">
                         </td>
-                        <td class="total-pay-col">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
+                        <td class="total-pay-col cell-total-pay">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
                         <td class="actions-col">
                             <div class="action-group">
                                 <button type="button" class="btn-icon btn-edit"
@@ -539,6 +544,45 @@
     document.getElementById('week-nav-pill').style.display = isWeek ? 'flex' : 'none';
     document.getElementById('btn-prev').style.display = isWeek ? 'flex' : 'none';
     document.getElementById('btn-next').style.display = isWeek ? 'flex' : 'none';
+});
+
+// ── TÍNH TIỀN REAL-TIME ──────────────────────────────────
+
+function formatVND(amount) {
+    return Math.round(amount).toLocaleString('vi-VN') + ' đ';
+}
+
+function recalcRow(row) {
+    const wage = parseFloat(row.dataset.wage.replace(/,/g, '').replace(/\./g, '')) || 0;
+    const hcChecked = row.querySelectorAll('.att-hc:checked').length;
+    const tcChecked = row.querySelectorAll('.att-tc:checked').length;
+    const adjInput  = row.querySelector('.adj-input');
+    const adj       = parseFloat(adjInput ? adjInput.value : 0) || 0;
+
+    // Công thức: HC×lương + TC×(lương÷8) + tăng/giảm
+    const totalPay = (hcChecked * wage) + (tcChecked * (wage / 8)) + adj;
+
+    const cellHc  = row.querySelector('.cell-total-hc');
+    const cellTc  = row.querySelector('.cell-total-tc');
+    const cellPay = row.querySelector('.cell-total-pay');
+
+    if (cellHc)  cellHc.textContent  = hcChecked;
+    if (cellTc)  cellTc.textContent  = tcChecked;
+    if (cellPay) {
+        cellPay.textContent  = formatVND(totalPay);
+        cellPay.style.color      = totalPay > 0 ? 'var(--primary)' : '';
+        cellPay.style.fontWeight = totalPay > 0 ? '700' : '';
+    }
+}
+
+document.querySelectorAll('.payroll-row').forEach(function(row) {
+    row.querySelectorAll('.att-checkbox').forEach(function(cb) {
+        cb.addEventListener('change', function() { recalcRow(row); });
+    });
+    const adjInput = row.querySelector('.adj-input');
+    if (adjInput) {
+        adjInput.addEventListener('input', function() { recalcRow(row); });
+    }
 });
 </script>
 
