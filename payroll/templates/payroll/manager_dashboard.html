@@ -190,6 +190,15 @@
         color: #155724;
     }
     
+    .status-badge {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: bold;
+    }
+    .status-active { background: #e6fffa; color: #2c7a7b; }
+    .status-locked { background: #fff5f5; color: #c53030; }
+
     .action-buttons {
         display: flex;
         gap: 8px;
@@ -345,7 +354,8 @@
                 
                 <div class="form-group">
                     <label for="password">Mật khẩu <span style="color: red;">*</span></label>
-                    <input type="password" id="password" name="password" required placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)">
+                    <input type="password" id="password" name="password" required minlength="6" placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)">
+                    <small style="color: #666; font-size: 11px; margin-top: 4px; display: block;">Quy định: Mật khẩu phải từ 6 ký tự trở lên.</small>
                 </div>
             </div>
             
@@ -385,7 +395,17 @@
     
     <!-- Users List -->
     <div class="card">
-        <h3 class="card-title"><i class="fas fa-users"></i> Danh sách người dùng ({{ user_count }})</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 18px; font-weight: 600;"><i class="fas fa-users"></i> Danh sách người dùng ({{ user_count }})</h3>
+            
+            <form method="GET" action="{% url 'payroll:manager_dashboard' %}" style="display: flex; gap: 5px;">
+                <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm tên, email..." 
+                       style="padding: 6px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; width: 200px;">
+                <button type="submit" class="btn btn-secondary btn-small">
+                    <i class="fas fa-search"></i>
+                </button>
+            </form>
+        </div>
         
         {% if users %}
         <div class="table-container">
@@ -396,6 +416,7 @@
                         <th>Họ tên</th>
                         <th>Email</th>
                         <th>Cấp độ</th>
+                        <th>Trạng thái</th>
                         <th>Ngày tạo</th>
                         <th>Hành động</th>
                     </tr>
@@ -417,19 +438,57 @@
                                 {% endif %}
                             </span>
                         </td>
+                        <td>
+                            {% if user.is_active %}
+                                <span class="status-badge status-active">Đang hoạt động</span>
+                            {% else %}
+                                <span class="status-badge status-locked">Đã khóa</span>
+                            {% endif %}
+                        </td>
                         <td>{{ user.date_joined|date:"d/m/Y H:i" }}</td>
                         <td>
-                            <div class="action-buttons">
-                                <form method="POST" action="{% url 'payroll:edit_user_role' user.id %}" style="display: inline;">
+                            <div class="action-buttons" style="flex-direction: column; gap: 4px;">
+                                <form method="POST" action="{% url 'payroll:edit_user' user.id %}" style="display: inline;">
                                     {% csrf_token %}
                                     <select name="role" onchange="this.form.submit();" class="btn btn-secondary btn-small" style="padding: 6px; width: auto;">
-                                        <option value="" disabled>Đổi cấp</option>
                                         <option value="manager" {% if user.profile.role == 'manager' %}selected{% endif %}>Cấp 1 - Quản lý</option>
                                         <option value="user" {% if user.profile.role == 'user' %}selected{% endif %}>Cấp 2 - Người dùng</option>
                                         <option value="viewer" {% if user.profile.role == 'viewer' %}selected{% endif %}>Cấp 3 - Người xem</option>
                                     </select>
                                 </form>
                                 
+                                <div style="display: flex; gap: 4px;">
+                                    {% if user != request.user %}
+                                    <form method="POST" action="{% url 'payroll:toggle_user_status' user.id %}" style="display: inline;">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn {% if user.is_active %}btn-danger{% else %}btn-success{% endif %} btn-small">
+                                            <i class="fas {% if user.is_active %}fa-user-lock{% else %}fa-user-check{% endif %}"></i>
+                                            {% if user.is_active %}Khóa{% else %}Mở{% endif %}
+                                        </button>
+                                    </form>
+                                    
+                                    <button type="button" 
+                                            onclick="var p = prompt('Đặt lại mật khẩu cho {{ user.username|escapejs }}\n(Tối thiểu 6 ký tự):'); 
+                                                     if(p !== null) { 
+                                                         p = p.trim();
+                                                         if(p.length >= 6) {
+                                                             document.getElementById('pw_field_{{user.id}}').value = p; 
+                                                             document.getElementById('pw_form_{{user.id}}').submit(); 
+                                                         } else if(p !== '') {
+                                                             alert('Mật khẩu quá ngắn! Vui lòng nhập ít nhất 6 ký tự.');
+                                                         }
+                                                     }" 
+                                            class="btn btn-secondary btn-small">
+                                        <i class="fas fa-key"></i> Pass
+                                    </button>
+                                    
+                                    <form id="pw_form_{{user.id}}" method="POST" action="{% url 'payroll:reset_user_password' user.id %}" style="display: none;">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="new_password" id="pw_field_{{user.id}}">
+                                    </form>
+                                    {% endif %}
+                                </div>
+
                                 {% if user != request.user %}
                                 <form method="POST" action="{% url 'payroll:delete_user' user.id %}" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa tài khoản này?');">
                                     {% csrf_token %}

@@ -18,9 +18,14 @@ urlpatterns = [
     # Manager routes
     path('manager/dashboard/', views.manager_dashboard, name='manager_dashboard'),
     path('manager/create-user/', views.create_user, name='create_user'),
-    path('manager/edit-user/<int:user_id>/', views.edit_user_role, name='edit_user_role'),
+    path('manager/edit-user/<int:user_id>/', views.edit_user, name='edit_user'),
+    path('manager/toggle-status/<int:user_id>/', views.toggle_user_status, name='toggle_user_status'),
+    path('manager/reset-password/<int:user_id>/', views.reset_user_password, name='reset_user_password'),
     path('manager/delete-user/<int:user_id>/', views.delete_user, name='delete_user'),
     
+    # User routes
+    path('user/change-password/', views.change_own_password, name='change_own_password'),
+
     # Project management routes
     path('projects/create/', views.du_an_create, name='du_an_create'),
     path('projects/<int:pk>/', views.du_an_detail, name='du_an_detail'),

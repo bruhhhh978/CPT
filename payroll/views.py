@@ -9,6 +9,7 @@ from django.db.models import Sum, Q
 from .models import Employee, Attendance, Adjustment, AdjustmentLog, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang
 from decimal import Decimal
 import pandas as pd
+from django.db import transaction
 from django.http import HttpResponse
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
@@ -27,13 +28,24 @@ from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
 @manager_only
 def manager_dashboard(request):
     """Manager-only dashboard for managing users and system settings"""
+    search_query = request.GET.get('q', '').strip()
     users = User.objects.all().select_related('profile')
+    
+    if search_query:
+        users = users.filter(
+            Q(username__icontains=search_query) |
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query) |
+            Q(email__icontains=search_query)
+        )
+
     context = {
         'users': users,
         'user_count': users.count(),
         'manager_count': users.filter(profile__role='manager').count(),
         'user_count_role': users.filter(profile__role='user').count(),
         'viewer_count': users.filter(profile__role='viewer').count(),
+        'search_query': search_query,
     }
     return render(request, 'payroll/manager_dashboard.html', context)
 
@@ -57,8 +69,12 @@ def create_user(request):
             messages.error(request, 'Tên đăng nhập đã tồn tại.')
             return redirect('payroll:manager_dashboard')
         
-        if not password or len(password) < 6:
-            messages.error(request, 'Mật khẩu phải ít nhất 6 ký tự.')
+        if not password:
+            messages.error(request, 'Mật khẩu không được để trống.')
+            return redirect('payroll:manager_dashboard')
+            
+        if len(password) < 6:
+            messages.error(request, 'Mật khẩu không đúng quy định: Phải có ít nhất 6 ký tự.')
             return redirect('payroll:manager_dashboard')
         
         if role not in ['manager', 'user', 'viewer']:
@@ -66,17 +82,22 @@ def create_user(request):
             return redirect('payroll:manager_dashboard')
         
         try:
-            # Create user
-            user = User.objects.create_user(
-                username=username,
-                password=password,
-                email=email,
-                first_name=first_name,
-                last_name=last_name
-            )
-            
-            # Create user profile with role
-            UserProfile.objects.create(user=user, role=role)
+            with transaction.atomic():
+                # Create user
+                user = User.objects.create_user(
+                    username=username,
+                    password=password,
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name
+                )
+                
+                # Sử dụng update_or_create để tránh lỗi UNIQUE constraint 
+                # nếu có signal tự động tạo profile khi tạo User.
+                UserProfile.objects.update_or_create(
+                    user=user, 
+                    defaults={'role': role}
+                )
             messages.success(request, f'Tạo tài khoản "{username}" với cấp "{role}" thành công.')
         except Exception as e:
             messages.error(request, f'Lỗi khi tạo tài khoản: {str(e)}')
@@ -86,24 +107,75 @@ def create_user(request):
     return redirect('payroll:manager_dashboard')
 
 @manager_only
-def edit_user_role(request, user_id):
-    """Edit user role (manager only)"""
+def edit_user(request, user_id):
+    """Edit user details and role (manager only)"""
     if request.method == 'POST':
         try:
             user = User.objects.get(id=user_id)
-            # Prevent self-demotion
-            if user == request.user and request.POST.get('role') != 'manager':
-                messages.error(request, 'Bạn không thể hạ cấp chính mình.')
-                return redirect('payroll:manager_dashboard')
             
-            user.profile.role = request.POST.get('role', 'user')
-            user.profile.save()
-            messages.success(request, f'Cập nhật cấp độ cho "{user.username}" thành công.')
+            # Chỉ cập nhật thông tin cơ bản nếu các trường này tồn tại trong POST
+            # Điều này giúp tránh việc xóa trắng dữ liệu khi cập nhật quyền từ bảng danh sách
+            if 'first_name' in request.POST:
+                user.first_name = request.POST.get('first_name', '').strip()
+            if 'last_name' in request.POST:
+                user.last_name = request.POST.get('last_name', '').strip()
+            if 'email' in request.POST:
+                user.email = request.POST.get('email', '').strip()
+            user.save()
+            
+            # Update role if provided
+            new_role = request.POST.get('role')
+            if new_role:
+                # Prevent self-demotion
+                if user == request.user and new_role != 'manager':
+                    messages.error(request, 'Bạn không thể hạ cấp chính mình.')
+                else:
+                    user.profile.role = new_role
+                    user.profile.save()
+            
+            messages.success(request, f'Cập nhật thông tin cho "{user.username}" thành công.')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
         except Exception as e:
             messages.error(request, f'Lỗi khi cập nhật: {str(e)}')
     
+    return redirect('payroll:manager_dashboard')
+
+@manager_only
+def toggle_user_status(request, user_id):
+    """Lock or unlock user account (manager only)"""
+    if request.method == 'POST':
+        try:
+            user = User.objects.get(id=user_id)
+            if user == request.user:
+                messages.error(request, 'Bạn không thể tự khóa tài khoản của chính mình.')
+            else:
+                user.is_active = not user.is_active
+                user.save()
+                status_msg = "Mở khóa" if user.is_active else "Khóa"
+                messages.success(request, f'{status_msg} tài khoản "{user.username}" thành công.')
+        except User.DoesNotExist:
+            messages.error(request, 'Người dùng không tồn tại.')
+    return redirect('payroll:manager_dashboard')
+
+@manager_only
+def reset_user_password(request, user_id):
+    """Directly update password for level 2 accounts (manager only)"""
+    if request.method == 'POST':
+        try:
+            user = User.objects.get(id=user_id)
+            new_password = request.POST.get('new_password', '').strip()
+            
+            if not new_password or len(new_password) < 6:
+                messages.error(request, f'Lỗi: Mật khẩu cho tài khoản "{user.username}" phải từ 6 ký tự trở lên.')
+            else:
+                user.set_password(new_password)
+                user.save()
+                messages.success(request, f'Đã đặt lại mật khẩu cho tài khoản "{user.username}".')
+        except User.DoesNotExist:
+            messages.error(request, 'Người dùng không tồn tại.')
+        except Exception as e:
+            messages.error(request, f'Lỗi: {str(e)}')
     return redirect('payroll:manager_dashboard')
 
 @manager_only
@@ -127,6 +199,30 @@ def delete_user(request, user_id):
             messages.error(request, f'Lỗi khi xóa: {str(e)}')
     
     return redirect('payroll:manager_dashboard')
+
+@user_and_manager
+def change_own_password(request):
+    """Allow any user to change their own password"""
+    if request.method == 'POST':
+        old_password = request.POST.get('old_password')
+        new_password = request.POST.get('new_password')
+        confirm_password = request.POST.get('confirm_password')
+        
+        if not request.user.check_password(old_password):
+            messages.error(request, 'Mật khẩu cũ không chính xác.')
+        elif new_password != confirm_password:
+            messages.error(request, 'Mật khẩu xác nhận không khớp.')
+        elif len(new_password) < 6:
+            messages.error(request, 'Mật khẩu mới phải có ít nhất 6 ký tự.')
+        else:
+            request.user.set_password(new_password)
+            request.user.save()
+            # Re-login the user is handled by Django session automatically if using auth views, 
+            # here we might need to update session but for simplicity:
+            messages.success(request, 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.')
+            return redirect('login:login')
+            
+    return render(request, 'payroll/change_password.html')
 
 # ============ END MANAGER DASHBOARD ============
 
