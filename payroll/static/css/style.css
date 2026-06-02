@@ -166,6 +166,14 @@ h1 {
     position: absolute;
     background: white;
     padding: 10px;
+    min-width: max-content;
+    right: 0;
+}
+
+.dropdown a {
+    display: block;
+    margin-left: 0;
+    white-space: nowrap;
 }
 
 .user-menu:hover .dropdown {
