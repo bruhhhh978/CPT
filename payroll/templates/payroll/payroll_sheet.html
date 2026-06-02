@@ -323,11 +323,11 @@
                         {% for att in row.daily_attendance %}
                         <td class="hc-col">
                             <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
-                                value="{{ att.hc_symbol }}" class="att-input att-hc" placeholder="x / &#92;" maxlength="4" {% if not can_edit %}disabled{% endif %}>
+                                value="{{ att.hc_symbol }}" class="att-input att-hc" data-placeholder="x / &#92;" maxlength="4" {% if not can_edit %}disabled{% endif %}>
                         </td>
                         <td class="tc-col">
                             <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
-                                value="{{ att.tc_symbol }}" class="att-input att-tc" placeholder="0.0" maxlength="6" {% if not can_edit %}disabled{% endif %}>
+                                value="{{ att.tc_symbol }}" class="att-input att-tc" data-placeholder="0.0" maxlength="6" {% if not can_edit %}disabled{% endif %}>
                         </td>
                         {% endfor %}
                             <!-- Tổng HC -->
@@ -454,7 +454,6 @@
     </div>
 </div>
 {% endif %}
-
 <!-- Modal Chỉnh Sửa -->
 {% if can_edit %}
 <div id="edit-worker-modal" class="modal">
@@ -619,6 +618,39 @@ document.querySelectorAll('.payroll-row').forEach(function(row) {
     const adjInput = row.querySelector('.adj-input');
     if (adjInput) {
         adjInput.addEventListener('input', function() { recalcRow(row); });
+    }
+});
+document.querySelectorAll('.att-input').forEach(input => {
+    const placeholder = input.dataset.placeholder;
+
+    // Khi focus → hiện gợi ý nếu đang trống
+    input.addEventListener('focus', function() {
+        if (this.value === '') {
+            this.value = placeholder;
+            this.style.color = '#999'; // màu gợi ý
+        }
+    });
+
+    // Khi người dùng bắt đầu nhập → xóa gợi ý
+    input.addEventListener('input', function() {
+        if (this.value === placeholder) {
+            this.value = '';
+            this.style.color = '';
+        } else {
+            this.style.color = '';
+        }
+    });
+
+    // Khi blur → nếu vẫn là placeholder thì xóa đi
+    input.addEventListener('blur', function() {
+        if (this.value === placeholder) {
+            this.value = '';
+        }
+    });
+
+    // Nếu có dữ liệu thật từ DB → hiển thị bình thường
+    if (input.value !== '') {
+        input.style.color = '';
     }
 });
 </script>
