@@ -48,8 +48,18 @@ class Adjustment(models.Model):
 
 #1 bản quán lý công trình
 class CongTrinh(models.Model):
-    ten_cong_trinh = models.CharField(max_length=255, verbose_name="tên công trình", unique=True)
-    dia_diem = models.CharField(max_length=255, blank=True, null=True, verbose_name="địa điểm")
+    TRANG_THAI_CHOICES = [
+        ('MOI', 'Mới tạo'),
+        ('DANG_THI_CONG', 'Đang thi công'),
+        ('TAM_DUNG', 'Tạm dừng'),
+        ('HOAN_THANH', 'Hoàn thành'),
+    ]
+    ten_cong_trinh = models.CharField(max_length=255, verbose_name="Tên công trình", unique=True)
+    dia_diem = models.CharField(max_length=255, blank=True, null=True, verbose_name="Địa điểm")
+    ngay_bat_dau = models.DateField(default=timezone.now, verbose_name="Ngày bắt đầu")
+    thoi_han_ket_thuc = models.DateField(blank=True, null=True, verbose_name="Thời hạn kết thúc")
+    mo_ta = models.TextField(blank=True, null=True, verbose_name="Mô tả")
+    trang_thai = models.CharField(max_length=20, choices=TRANG_THAI_CHOICES, default='MOI', verbose_name="Trạng thái")
 
     class Meta:
         db_table = "cong_trinh"
@@ -64,6 +74,16 @@ class CongTrinh(models.Model):
     def save(self, *args, **kwargs):
         self.clean()
         super().save(*args, **kwargs)
+
+    def get_status_display_color(self):
+        """Trả về mã màu cho từng trạng thái dự án"""
+        colors = {
+            'MOI': '#0dcaf0',         # Xanh nhạt (Info)
+            'DANG_THI_CONG': '#198754', # Xanh lá (Success)
+            'TAM_DUNG': '#ffc107',     # Vàng (Warning)
+            'HOAN_THANH': '#6c757d',    # Xám (Secondary)
+        }
+        return colors.get(self.trang_thai, '#000000')
 
     def __str__(self):
         return self.ten_cong_trinh

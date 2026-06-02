@@ -3,8 +3,10 @@ from . import views
 
 app_name='payroll'
 urlpatterns = [
-    path('', views.payroll_sheet, name='payroll_sheet'),
-    path('sheet/', views.payroll_sheet, name='payroll_sheet_alias'),
+    path('', views.du_an_list, name='du_an_list'),
+    path('sheet/', views.payroll_sheet, name='payroll_sheet'),
+    # Hỗ trợ gõ Sheet/ có chữ hoa
+    path('Sheet/', views.payroll_sheet),
     path('statistics/', views.payroll_statistics, name='payroll_statistics'),
     path('add-employee/', views.add_employee, name='add_employee'),
     path('edit-employee/<int:pk>/', views.edit_employee, name='edit_employee'),
@@ -18,4 +20,10 @@ urlpatterns = [
     path('manager/create-user/', views.create_user, name='create_user'),
     path('manager/edit-user/<int:user_id>/', views.edit_user_role, name='edit_user_role'),
     path('manager/delete-user/<int:user_id>/', views.delete_user, name='delete_user'),
+    
+    # Project management routes
+    path('projects/create/', views.du_an_create, name='du_an_create'),
+    path('projects/<int:pk>/', views.du_an_detail, name='du_an_detail'),
+    path('projects/<int:pk>/edit/', views.du_an_edit, name='du_an_edit'),
+    path('projects/<int:pk>/delete/', views.du_an_delete, name='du_an_delete'),
 ]

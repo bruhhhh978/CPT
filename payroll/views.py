@@ -4,9 +4,8 @@ from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
-from django.db.models import Sum
-from django.db.models import Q
-from .models import Employee, Attendance, Adjustment
+from django.db.models import Sum, Q
+from .models import Employee, Attendance, Adjustment, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang
 from decimal import Decimal
 import pandas as pd
 from django.http import HttpResponse
@@ -18,6 +17,9 @@ from django.contrib.auth.models import User
 from login.models import UserProfile
 from .decorators import manager_only, user_and_manager, allow_viewer
 from django.contrib import messages
+from .forms import CongTrinhForm
+from datetime import timedelta
+from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
 
 # ============ MANAGER DASHBOARD & USER MANAGEMENT ============
 
@@ -616,7 +618,7 @@ def import_excel(request):
                         adj.amount = adj_val
                         adj.save()
 
-    return redirect(f"/?date={request.POST.get('current_date', '')}")
+    return redirect(reverse('payroll:payroll_sheet') + f"?date={request.POST.get('current_date', '')}")
 
 def delete_all_data(request):
     # Check authorization - only managers can delete all
@@ -701,7 +703,7 @@ def save_attendance(request):
                 adjustment.amount = adj_val
                 adjustment.save()
 
-        redirect_url = f"/?date={current_date_str}&view_type={view_type}"
+        redirect_url = reverse('payroll:payroll_sheet') + f"?date={current_date_str}&view_type={view_type}"
         if search_query:
             redirect_url += f"&q={search_query}&search_type={request.POST.get('search_type', 'name')}"
         return redirect(redirect_url)
@@ -828,3 +830,119 @@ def export_payroll_excel(dates, start_date, end_date, view_type='week'):
     return response
 
 
+
+
+# ============ D? �N QU?N L? (PROJECT MANAGEMENT) ============
+
+@allow_viewer
+def du_an_list(request):
+    """Danh sách dự án với bộ lọc và tìm kiếm"""
+    search_query = request.GET.get('search', '').strip()
+    time_filter = request.GET.get('time_filter', 'all')
+    status_filter = request.GET.get('status', '')
+    
+    du_an = CongTrinh.objects.all()
+    
+    if search_query:
+        du_an = du_an.filter(
+            Q(ten_cong_trinh__icontains=search_query) | 
+            Q(dia_diem__icontains=search_query)
+        )
+    
+    if status_filter:
+        du_an = du_an.filter(trang_thai=status_filter)
+    
+    now = timezone.now().date()
+    if time_filter == 'ngay':
+        du_an = du_an.filter(ngay_bat_dau=now)
+    elif time_filter == 'tuan':
+        start_week = now - timedelta(days=now.weekday())
+        end_week = start_week + timedelta(days=6)
+        du_an = du_an.filter(ngay_bat_dau__gte=start_week, ngay_bat_dau__lte=end_week)
+    elif time_filter == 'thang':
+        du_an = du_an.filter(ngay_bat_dau__year=now.year, ngay_bat_dau__month=now.month)
+    elif time_filter == 'nam':
+        du_an = du_an.filter(ngay_bat_dau__year=now.year)
+    
+    du_an = du_an.order_by('-ngay_bat_dau')
+    
+    context = {
+        'du_an': du_an,
+        'search_query': search_query,
+        'time_filter': time_filter,
+        'status_filter': status_filter,
+        'status_choices': CongTrinh.TRANG_THAI_CHOICES,
+        'can_edit': request.user.is_authenticated and request.user.profile.role in ['manager', 'user']
+    }
+    return render(request, 'payroll/du_an_list.html', context)
+
+
+@manager_only
+def du_an_create(request):
+    """Th�m d? �n m?i"""
+    if request.method == 'POST':
+        form = CongTrinhForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Th�m d? �n th�nh c�ng!')
+            return redirect('payroll:du_an_list')
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f'{field}: {error}')
+    else:
+        form = CongTrinhForm()
+    
+    context = {'form': form, 'title': 'Th�m d? �n m?i'}
+    return render(request, 'payroll/du_an_form.html', context)
+
+
+@manager_only
+def du_an_edit(request, pk):
+    """Ch?nh s?a d? �n"""
+    du_an = get_object_or_404(CongTrinh, pk=pk)
+    
+    if request.method == 'POST':
+        form = CongTrinhForm(request.POST, instance=du_an)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'C?p nh?t d? �n th�nh c�ng!')
+            return redirect('payroll:du_an_list')
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f'{field}: {error}')
+    else:
+        form = CongTrinhForm(instance=du_an)
+    
+    context = {'form': form, 'du_an': du_an, 'title': 'Ch?nh s?a d? �n'}
+    return render(request, 'payroll/du_an_form.html', context)
+
+
+@manager_only
+def du_an_delete(request, pk):
+    """X�a d? �n"""
+    du_an = get_object_or_404(CongTrinh, pk=pk)
+    
+    if request.method == 'POST':
+        du_an.delete()
+        messages.success(request, 'X�a d? �n th�nh c�ng!')
+        return redirect('payroll:du_an_list')
+    
+    context = {'du_an': du_an}
+    return render(request, 'payroll/du_an_confirm_delete.html', context)
+
+
+@user_and_manager
+def du_an_detail(request, pk):
+    """Chi ti?t d? �n"""
+    du_an = get_object_or_404(CongTrinh, pk=pk)
+    cham_cong = ChamCongHangNgay.objects.filter(cong_trinh=du_an).count()
+    nhan_vien = ChamCongHangNgay.objects.filter(cong_trinh=du_an).values('nhan_vien').distinct().count()
+    
+    context = {
+        'du_an': du_an,
+        'cham_cong_count': cham_cong,
+        'nhan_vien_count': nhan_vien,
+    }
+    return render(request, 'payroll/du_an_detail.html', context)
