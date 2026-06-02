@@ -244,30 +244,35 @@
 
     <div class="sep"></div>
 
-    <!-- 4. Action buttons -->
+    <!-- 4. Action buttons (only show if can_edit) -->
+    {% if can_edit %}
     <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
         <i class="fas fa-user-plus"></i> Thêm
     </button>
     <button onclick="document.getElementById('import-excel-modal').style.display='block'" class="btn btn-outline">
         <i class="fas fa-file-import"></i> Nhập Excel
     </button>
-    <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
+    {% endif %}
+    <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&search_type={{ search_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
         <i class="fas fa-chart-column"></i> Thống kê
     </a>
-    <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
+    <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&search_type={{ search_type }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
         <i class="fas fa-file-excel"></i> Xuất Excel
     </a>
+    {% if can_edit %}
     <a href="{% url 'payroll:delete_all_data' %}" class="btn btn-danger"
         onclick="return confirm('CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ nhân viên và dữ liệu chấm công. Bạn có chắc chắn không?')">
         <i class="fas fa-trash-alt"></i> Xóa tất cả
     </a>
+    {% endif %}
 
 </div>
 
-    <form action="{% url 'payroll:save_attendance' %}" method="POST" class="payroll-form">
+    <form action="{% url 'payroll:save_attendance' %}" method="POST" class="payroll-form" {% if not can_edit %}style="pointer-events: none; opacity: 0.6;"{% endif %}>
         {% csrf_token %}
         <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
         <input type="hidden" name="view_type" value="{{ view_type }}">
+        <input type="hidden" name="search_type" value="{{ search_type }}">
         <input type="hidden" name="q" value="{{ search_query }}">
 
         <div class="table-container">
@@ -292,8 +297,8 @@
                         <th rowspan="2" class="stt-col">STT</th>
                         <th rowspan="2" class="name-col">Họ tên</th>
                         <th rowspan="2" class="position-col">Nghề</th>
-                        {% for d in dates %}
-                        <th colspan="2" class="date-header">{{ d|date:"D d/m" }}</th>
+                        {% for header in date_headers %}
+                        <th colspan="2" class="date-header">{{ header.display }}</th>
                         {% endfor %}
                         <th rowspan="2" class="total-hc-col">Tổng HC</th>
                         <th rowspan="2" class="total-tc-col">Tổng TC</th>
@@ -303,7 +308,7 @@
                         <th rowspan="2" class="actions-col">Thao tác</th>
                     </tr>
                     <tr>
-                        {% for d in dates %}
+                        {% for header in date_headers %}
                         <th class="hc-col">HC</th>
                         <th class="tc-col">TC</th>
                         {% endfor %}
@@ -317,12 +322,12 @@
                         <td class="position-col">{{ row.employee.position }}</td>
                         {% for att in row.daily_attendance %}
                         <td class="hc-col">
-                            <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc" {% if att.hc_symbol == 'x' or att.hc_symbol == '1' or att.hc_symbol == '1.0' %}checked{% endif %}
-                                class="att-checkbox att-hc">
+                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
+                                value="{{ att.hc_symbol }}" class="att-input att-hc" placeholder="x / &#92;" maxlength="4" {% if not can_edit %}disabled{% endif %}>
                         </td>
                         <td class="tc-col">
-                            <input type="checkbox" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc" {% if att.tc_symbol == '1' or att.tc_symbol == '1.0' %}checked{% endif %}
-                                class="att-checkbox att-tc">
+                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
+                                value="{{ att.tc_symbol }}" class="att-input att-tc" placeholder="0.0" maxlength="6" {% if not can_edit %}disabled{% endif %}>
                         </td>
                         {% endfor %}
                             <!-- Tổng HC -->
@@ -336,10 +341,11 @@
                         <td class="adj-col">
                             <input type="number" 
                                 name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
-                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input adj-input">
+                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input adj-input" {% if not can_edit %}disabled{% endif %}>
                         </td>
                         <td class="total-pay-col cell-total-pay">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
                         <td class="actions-col">
+                            {% if can_edit %}
                             <div class="action-group">
                                 <button type="button" class="btn-icon btn-edit"
                                     onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name }}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
@@ -351,6 +357,9 @@
                                     <i class="fas fa-trash"></i>
                                 </a>
                             </div>
+                            {% else %}
+                            <span style="color: #999; font-size: 12px;">Chỉ xem</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
@@ -373,14 +382,21 @@
         </div>
 
         <div class="form-footer">
+            {% if can_edit %}
             <button type="submit" class="btn btn-primary btn-lg">
                 <i class="fas fa-save"></i> LƯU CHẤM CÔNG
             </button>
+            {% else %}
+            <div style="background: #f0f0f0; padding: 15px; border-radius: 4px; text-align: center; color: #666;">
+                <i class="fas fa-lock"></i> Bạn đang ở chế độ xem. Cần tài khoản Cấp 1 hoặc Cấp 2 để chỉnh sửa dữ liệu.
+            </div>
+            {% endif %}
         </div>
     </form>
 </div>
 
 <!-- Modal Thêm Người Làm -->
+{% if can_edit %}
 <div id="add-worker-modal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -414,8 +430,10 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <!-- Modal Nhập Excel -->
+{% if can_edit %}
 <div id="import-excel-modal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -435,8 +453,10 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <!-- Modal Chỉnh Sửa -->
+{% if can_edit %}
 <div id="edit-worker-modal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -470,6 +490,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <script>
     function openEditModal(id, name, position, wage) {
@@ -552,22 +573,38 @@ function formatVND(amount) {
     return Math.round(amount).toLocaleString('vi-VN') + ' đ';
 }
 
+function parseAttendanceValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return 0;
+    if (raw.toLowerCase() === 'x') return 1;
+    if (raw === '/' || raw === '\\') return 0.5;
+    const parsed = parseFloat(raw.replace(/,/g, '.'));
+    return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 function recalcRow(row) {
     const wage = parseFloat(row.dataset.wage.replace(/,/g, '').replace(/\./g, '')) || 0;
-    const hcChecked = row.querySelectorAll('.att-hc:checked').length;
-    const tcChecked = row.querySelectorAll('.att-tc:checked').length;
-    const adjInput  = row.querySelector('.adj-input');
-    const adj       = parseFloat(adjInput ? adjInput.value : 0) || 0;
+    let totalHc = 0;
+    let totalTc = 0;
 
-    // Công thức: HC×lương + TC×(lương÷8) + tăng/giảm
-    const totalPay = (hcChecked * wage) + (tcChecked * (wage / 8)) + adj;
+    row.querySelectorAll('.att-hc').forEach(function(input) {
+        totalHc += parseAttendanceValue(input.value);
+    });
+    row.querySelectorAll('.att-tc').forEach(function(input) {
+        totalTc += parseAttendanceValue(input.value);
+    });
+
+    const adjInput = row.querySelector('.adj-input');
+    const adj = parseFloat((adjInput ? adjInput.value : '').replace(/,/g, '.')) || 0;
+
+    const totalPay = (totalHc * wage) + (totalTc * (wage / 8)) + adj;
 
     const cellHc  = row.querySelector('.cell-total-hc');
     const cellTc  = row.querySelector('.cell-total-tc');
     const cellPay = row.querySelector('.cell-total-pay');
 
-    if (cellHc)  cellHc.textContent  = hcChecked;
-    if (cellTc)  cellTc.textContent  = tcChecked;
+    if (cellHc)  cellHc.textContent  = totalHc;
+    if (cellTc)  cellTc.textContent  = totalTc;
     if (cellPay) {
         cellPay.textContent  = formatVND(totalPay);
         cellPay.style.color      = totalPay > 0 ? 'var(--primary)' : '';
@@ -576,8 +613,8 @@ function recalcRow(row) {
 }
 
 document.querySelectorAll('.payroll-row').forEach(function(row) {
-    row.querySelectorAll('.att-checkbox').forEach(function(cb) {
-        cb.addEventListener('change', function() { recalcRow(row); });
+    row.querySelectorAll('.att-hc, .att-tc').forEach(function(input) {
+        input.addEventListener('input', function() { recalcRow(row); });
     });
     const adjInput = row.querySelector('.adj-input');
     if (adjInput) {

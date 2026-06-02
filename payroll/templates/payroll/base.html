@@ -26,8 +26,22 @@
                 <a href="{% url 'payroll:payroll_sheet' %}">Bảng lương</a>
                 <a href="{% url 'payroll:payroll_statistics' %}">Thống kê</a>
                 {% if user.is_authenticated %}
+                    {% if user.profile.role == 'manager' %}
+                    <a href="{% url 'payroll:manager_dashboard' %}" style="color: #f093fb; font-weight: 600;">
+                        <i class="fas fa-cog"></i> Quản lý
+                    </a>
+                    {% endif %}
                     <div class="user-menu">
-                        <span>Xin chào, {{ user.username }}</span>
+                        <span>
+                            {% if user.profile.role == 'manager' %}
+                                <i class="fas fa-crown"></i> 
+                            {% elif user.profile.role == 'user' %}
+                                <i class="fas fa-user"></i> 
+                            {% else %}
+                                <i class="fas fa-eye"></i> 
+                            {% endif %}
+                            {{ user.username }}
+                        </span>
                         <div class="dropdown">
                             <a href="{% url 'login:logout' %}">Đăng xuất</a>
                         </div>

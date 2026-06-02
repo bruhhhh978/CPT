@@ -14,7 +14,121 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.template.loader import render_to_string
+from django.contrib.auth.models import User
+from login.models import UserProfile
+from .decorators import manager_only, user_and_manager, allow_viewer
+from django.contrib import messages
+
+# ============ MANAGER DASHBOARD & USER MANAGEMENT ============
+
+@manager_only
+def manager_dashboard(request):
+    """Manager-only dashboard for managing users and system settings"""
+    users = User.objects.all().select_related('profile')
+    context = {
+        'users': users,
+        'user_count': users.count(),
+        'manager_count': users.filter(profile__role='manager').count(),
+        'user_count_role': users.filter(profile__role='user').count(),
+        'viewer_count': users.filter(profile__role='viewer').count(),
+    }
+    return render(request, 'payroll/manager_dashboard.html', context)
+
+@manager_only
+def create_user(request):
+    """Create new user account (manager only)"""
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '').strip()
+        email = request.POST.get('email', '').strip()
+        role = request.POST.get('role', 'user')
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        
+        # Validation
+        if not username or len(username) < 3:
+            messages.error(request, 'Tên đăng nhập phải ít nhất 3 ký tự.')
+            return redirect('payroll:manager_dashboard')
+        
+        if User.objects.filter(username=username).exists():
+            messages.error(request, 'Tên đăng nhập đã tồn tại.')
+            return redirect('payroll:manager_dashboard')
+        
+        if not password or len(password) < 6:
+            messages.error(request, 'Mật khẩu phải ít nhất 6 ký tự.')
+            return redirect('payroll:manager_dashboard')
+        
+        if role not in ['manager', 'user', 'viewer']:
+            messages.error(request, 'Cấp độ không hợp lệ.')
+            return redirect('payroll:manager_dashboard')
+        
+        try:
+            # Create user
+            user = User.objects.create_user(
+                username=username,
+                password=password,
+                email=email,
+                first_name=first_name,
+                last_name=last_name
+            )
+            
+            # Create user profile with role
+            UserProfile.objects.create(user=user, role=role)
+            messages.success(request, f'Tạo tài khoản "{username}" với cấp "{role}" thành công.')
+        except Exception as e:
+            messages.error(request, f'Lỗi khi tạo tài khoản: {str(e)}')
+        
+        return redirect('payroll:manager_dashboard')
+    
+    return redirect('payroll:manager_dashboard')
+
+@manager_only
+def edit_user_role(request, user_id):
+    """Edit user role (manager only)"""
+    if request.method == 'POST':
+        try:
+            user = User.objects.get(id=user_id)
+            # Prevent self-demotion
+            if user == request.user and request.POST.get('role') != 'manager':
+                messages.error(request, 'Bạn không thể hạ cấp chính mình.')
+                return redirect('payroll:manager_dashboard')
+            
+            user.profile.role = request.POST.get('role', 'user')
+            user.profile.save()
+            messages.success(request, f'Cập nhật cấp độ cho "{user.username}" thành công.')
+        except User.DoesNotExist:
+            messages.error(request, 'Người dùng không tồn tại.')
+        except Exception as e:
+            messages.error(request, f'Lỗi khi cập nhật: {str(e)}')
+    
+    return redirect('payroll:manager_dashboard')
+
+@manager_only
+def delete_user(request, user_id):
+    """Delete user account (manager only)"""
+    if request.method == 'POST':
+        try:
+            user = User.objects.get(id=user_id)
+            
+            # Prevent self-deletion
+            if user == request.user:
+                messages.error(request, 'Bạn không thể xóa chính mình.')
+                return redirect('payroll:manager_dashboard')
+            
+            username = user.username
+            user.delete()
+            messages.success(request, f'Xóa tài khoản "{username}" thành công.')
+        except User.DoesNotExist:
+            messages.error(request, 'Người dùng không tồn tại.')
+        except Exception as e:
+            messages.error(request, f'Lỗi khi xóa: {str(e)}')
+    
+    return redirect('payroll:manager_dashboard')
+
+# ============ END MANAGER DASHBOARD ============
+
 def get_week_range(date):
+    # Excel file uses week range from Friday to Thursday.
     days_since_friday = (date.weekday() - 4) % 7
     friday = date - datetime.timedelta(days=days_since_friday)
     return [friday + datetime.timedelta(days=i) for i in range(7)]
@@ -25,11 +139,9 @@ def get_available_weeks():
     for d in dates:
         days_since_friday = (d.weekday() - 4) % 7
         friday = d - datetime.timedelta(days=days_since_friday)
-        print(f"  date={d} weekday={d.weekday()} days_since_friday={days_since_friday} → friday={friday}")
         weeks.add(friday)
     return sorted(weeks)
-    print("available_weeks:", result)
-    return result
+
 def to_symbol(val):
     if val >= 1.0: return 'x'
     if val >= 0.5: return '/'
@@ -51,6 +163,32 @@ def get_target_date(request):
     if date_str:
         return datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
     return timezone.now().date()
+
+def get_weekday_label(date):
+    lookup = {
+        0: 'T2',
+        1: 'T3',
+        2: 'T4',
+        3: 'T5',
+        4: 'T6',
+        5: 'T7',
+        6: 'CN',
+    }
+    return lookup.get(date.weekday(), date.strftime('%a'))
+
+def parse_attendance_input(value):
+    if value is None:
+        return Decimal('0.0')
+    value_str = str(value).strip()
+    if not value_str:
+        return Decimal('0.0')
+    try:
+        return from_symbol(value_str)
+    except Exception:
+        try:
+            return Decimal(value_str.replace(',', '.'))
+        except Exception:
+            return Decimal('0.0')
 
 def get_search_type(request):
     search_type = request.GET.get('search_type', 'name').strip().lower()
@@ -137,15 +275,51 @@ def build_weekly_payroll_data(employees, dates):
     return payroll_data
 
 def payroll_sheet(request):
+    # Determine if user can edit (must be authenticated AND be manager/user)
+    can_edit = False
+    is_viewer_mode = True
+    
+    if request.user.is_authenticated:
+        try:
+            role = request.user.profile.role
+            if role in ['manager', 'user']:
+                can_edit = True
+                is_viewer_mode = False
+            # Viewer role logged in - can_edit stays False
+        except:
+            messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
+            return redirect('login:login')
+    else:
+        # Not authenticated - viewer mode (read-only)
+        is_viewer_mode = True
+        can_edit = False
+    
     target_date = get_target_date(request)
+    view_type = request.GET.get('view_type', 'week').strip().lower()
+    if view_type not in ('week', 'month'):
+        view_type = 'week'
+
     search_query = request.GET.get('q', '').strip()
-    dates = get_week_range(target_date)
+    search_type = get_search_type(request)
+
+    if view_type == 'month':
+        import calendar
+        first_day = target_date.replace(day=1)
+        last_day = target_date.replace(day=calendar.monthrange(target_date.year, target_date.month)[1])
+        dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
+    else:
+        dates = get_week_range(target_date)
+
     start_date, end_date = dates[0], dates[-1]
 
     if request.GET.get('export') == 'excel':
+        # Only authenticated users can export
+        if not request.user.is_authenticated:
+            messages.error(request, 'Vui lòng đăng nhập để xuất Excel.')
+            return redirect('login:login')
         return export_payroll_excel(dates, start_date, end_date, view_type)
 
-    employees = get_filtered_employees(search_query)
+    employees = get_filtered_employees(search_query, search_type)
     payroll_data = build_weekly_payroll_data(employees, dates)
     available_weeks = [
         {
@@ -156,18 +330,52 @@ def payroll_sheet(request):
         for w in get_available_weeks()
     ]
 
+    date_headers = [
+        {
+            'date': d,
+            'label': get_weekday_label(d),
+            'display': f"{get_weekday_label(d)} {d.strftime('%d/%m')}"
+        }
+        for d in dates
+    ]
+
     context = {
+        'target_date': target_date,
         'dates': dates,
+        'date_headers': date_headers,
         'start_date': start_date,
         'end_date': end_date,
         'prev_week': start_date - datetime.timedelta(days=7),
         'next_week': start_date + datetime.timedelta(days=7),
         'payroll_data': payroll_data,
         'search_query': search_query,
+        'search_type': search_type,
+        'available_weeks': available_weeks,
+        'view_type': view_type,
+        'current_month': target_date.strftime('%m'),
+        'can_edit': can_edit,
+        'is_viewer_mode': is_viewer_mode,
     }
     return render(request, 'payroll/payroll_sheet.html', context)
 
 def payroll_statistics(request):
+    # Determine if user can edit
+    can_edit = False
+    is_viewer_mode = True
+    
+    if request.user.is_authenticated:
+        try:
+            role = request.user.profile.role
+            if role in ['manager', 'user']:
+                can_edit = True
+                is_viewer_mode = False
+        except:
+            messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
+            return redirect('login:login')
+    else:
+        is_viewer_mode = True
+        can_edit = False
+    
     target_date = get_target_date(request)
     search_query = request.GET.get('q', '').strip()
     search_type = get_search_type(request)
@@ -229,10 +437,26 @@ def payroll_statistics(request):
         'daily_totals': daily_totals,
         'chart_rows': chart_rows,
         'available_weeks': available_weeks,
+        'can_edit': can_edit,
+        'is_viewer_mode': is_viewer_mode,
     }
     return render(request, 'payroll/payroll_statistics.html', context)
 
 def add_employee(request):
+    # Check authorization - only users and managers can add
+    if not request.user.is_authenticated:
+        messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
+        return redirect('login:login')
+    
+    try:
+        role = request.user.profile.role
+        if role not in ['manager', 'user']:
+            messages.error(request, 'Bạn không có quyền thêm nhân viên.')
+            return redirect('payroll:payroll_sheet')
+    except:
+        messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
+        return redirect('login:login')
+    
     if request.method == 'POST':
         name = request.POST.get('name')
         date_of_birth = request.POST.get('date_of_birth') or None
@@ -244,9 +468,24 @@ def add_employee(request):
             position=pos,
             daily_wage=wage
         )
+        messages.success(request, f'Đã thêm nhân viên "{name}" thành công.')
     return redirect('payroll:payroll_sheet')
 
 def edit_employee(request, pk):
+    # Check authorization - only users and managers can edit
+    if not request.user.is_authenticated:
+        messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
+        return redirect('login:login')
+    
+    try:
+        role = request.user.profile.role
+        if role not in ['manager', 'user']:
+            messages.error(request, 'Bạn không có quyền sửa nhân viên.')
+            return redirect('payroll:payroll_sheet')
+    except:
+        messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
+        return redirect('login:login')
+    
     emp = get_object_or_404(Employee, pk=pk)
     if request.method == 'POST':
         emp.name = request.POST.get('name')
@@ -254,14 +493,45 @@ def edit_employee(request, pk):
         emp.position = request.POST.get('position')
         emp.daily_wage = request.POST.get('daily_wage')
         emp.save()
+        messages.success(request, f'Đã cập nhật nhân viên "{emp.name}" thành công.')
     return redirect('payroll:payroll_sheet')
 
 def delete_employee(request, pk):
+    # Check authorization - only users and managers can delete
+    if not request.user.is_authenticated:
+        messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
+        return redirect('login:login')
+    
+    try:
+        role = request.user.profile.role
+        if role not in ['manager', 'user']:
+            messages.error(request, 'Bạn không có quyền xóa nhân viên.')
+            return redirect('payroll:payroll_sheet')
+    except:
+        messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
+        return redirect('login:login')
+    
     emp = get_object_or_404(Employee, pk=pk)
+    emp_name = emp.name
     emp.delete()
+    messages.success(request, f'Đã xóa nhân viên "{emp_name}" thành công.')
     return redirect('payroll:payroll_sheet')
 
 def import_excel(request):
+    # Check authorization - only managers can import
+    if not request.user.is_authenticated:
+        messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
+        return redirect('login:login')
+    
+    try:
+        role = request.user.profile.role
+        if role != 'manager':
+            messages.error(request, 'Chỉ quản lý mới có thể nhập file Excel.')
+            return redirect('payroll:payroll_sheet')
+    except:
+        messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
+        return redirect('login:login')
+    
     if request.method == 'POST' and request.FILES.get('excel_file'):
         from openpyxl import load_workbook
         import re
@@ -349,15 +619,46 @@ def import_excel(request):
     return redirect(f"/?date={request.POST.get('current_date', '')}")
 
 def delete_all_data(request):
+    # Check authorization - only managers can delete all
+    if not request.user.is_authenticated:
+        messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
+        return redirect('login:login')
+    
+    try:
+        role = request.user.profile.role
+        if role != 'manager':
+            messages.error(request, 'Chỉ quản lý mới có thể xóa tất cả dữ liệu.')
+            return redirect('payroll:payroll_sheet')
+    except:
+        messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
+        return redirect('login:login')
+    
     Employee.objects.all().delete()
+    messages.success(request, 'Đã xóa tất cả dữ liệu nhân viên.')
     return redirect('payroll:payroll_sheet')
 
 def save_attendance(request):
+    # Check authorization - only users and managers can save
+    if not request.user.is_authenticated:
+        messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
+        return redirect('login:login')
+    
+    try:
+        role = request.user.profile.role
+        if role not in ['manager', 'user']:
+            messages.error(request, 'Bạn không có quyền lưu dữ liệu chấm công.')
+            return redirect('payroll:payroll_sheet')
+    except:
+        messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
+        return redirect('login:login')
     if request.method == 'POST':
         current_date_str = request.POST.get('current_date')
-        target_date = datetime.datetime.strptime(current_date_str, '%Y-%m-%d').date()
-        view_type = request.POST.get('view_type', 'week')
+        try:
+            target_date = datetime.datetime.strptime(current_date_str, '%Y-%m-%d').date()
+        except Exception:
+            target_date = timezone.now().date()
 
+        view_type = request.POST.get('view_type', 'week')
         if view_type == 'month':
             import calendar
             first_day = target_date.replace(day=1)
@@ -366,37 +667,46 @@ def save_attendance(request):
         else:
             dates = get_week_range(target_date)
 
+        start_date, end_date = dates[0], dates[-1]
         search_query = request.POST.get('q', '').strip()
         employees = get_filtered_employees(search_query)
 
-        # 1. Update attendance for visible employees using checkboxes
         for emp in employees:
             for d in dates:
                 date_str = d.strftime('%Y-%m-%d')
-                hc_key = f'att_{emp.id}_{date_str}_hc'
-                tc_key = f'att_{emp.id}_{date_str}_tc'
+                hc_val = parse_attendance_input(request.POST.get(f'att_{emp.id}_{date_str}_hc'))
+                tc_val = parse_attendance_input(request.POST.get(f'att_{emp.id}_{date_str}_tc'))
 
-                hc_val = Decimal('1.0') if hc_key in request.POST else Decimal('0.0')
-                tc_val = Decimal('1.0') if tc_key in request.POST else Decimal('0.0')
+                if hc_val == Decimal('0.0') and tc_val == Decimal('0.0'):
+                    Attendance.objects.filter(employee=emp, date=d).delete()
+                else:
+                    att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
+                    att.regular_workday = hc_val
+                    att.overtime_workday = tc_val
+                    att.save()
 
-                att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
-                att.regular_workday = hc_val
-                att.overtime_workday = tc_val
-                att.save()
+            adj_name = f'adj_{emp.id}_{start_date.strftime("%Y-%m-%d")}_{end_date.strftime("%Y-%m-%d")}'
+            adj_val = parse_attendance_input(request.POST.get(adj_name))
+            adjustment, created = Adjustment.objects.get_or_create(
+                employee=emp,
+                start_date=start_date,
+                end_date=end_date,
+                defaults={'amount': Decimal('0.0')}
+            )
 
-        # 2. Update adjustments
-        for key, value in request.POST.items():
-            if key.startswith('adj_'):
-                parts = key.split('_')
-                emp_id = parts[1]
-                emp = Employee.objects.get(id=emp_id)
-                adj, _ = Adjustment.objects.get_or_create(employee=emp, start_date=dates[0], end_date=dates[-1])
-                try:
-                    adj.amount = Decimal(value or '0')
-                    adj.save()
-                except: pass
-                
-    return redirect(f"/?date={request.POST.get('current_date', '')}")
+            if adj_val == Decimal('0.0'):
+                if not created:
+                    adjustment.delete()
+            else:
+                adjustment.amount = adj_val
+                adjustment.save()
+
+        redirect_url = f"/?date={current_date_str}&view_type={view_type}"
+        if search_query:
+            redirect_url += f"&q={search_query}&search_type={request.POST.get('search_type', 'name')}"
+        return redirect(redirect_url)
+
+    return redirect('payroll:payroll_sheet')
 
 def export_payroll_excel(dates, start_date, end_date, view_type='week'):
     wb = Workbook()
