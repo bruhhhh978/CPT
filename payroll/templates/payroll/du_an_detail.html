@@ -67,6 +67,12 @@
                 <a href="{% url 'payroll:du_an_edit' du_an.pk %}" class="btn btn-primary">
                     <i class="fas fa-edit"></i> Chỉnh sửa
                 </a>
+                <a href="{% url 'payroll:payroll_sheet' %}" class="btn btn-secondary">
+                    <i class="fas fa-file-invoice-dollar"></i> Bảng lương
+                </a>
+                <a href="{% url 'payroll:payroll_statistics' %}" class="btn btn-secondary">
+                    <i class="fas fa-file-invoice-dollar"></i> Thống kê
+                </a>
                 {% endif %}
             </div>
         </div>

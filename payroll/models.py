@@ -29,7 +29,7 @@ class Attendance(models.Model):
     # In the image, they use 'x' for 1.0, '\' for 0.5
     regular_workday = models.DecimalField(max_digits=3, decimal_places=1, default=0.0, verbose_name="Công HC")
     overtime_workday = models.DecimalField(max_digits=3, decimal_places=1, default=0.0, verbose_name="Công TC")
-    
+    cong_trinh = models.ForeignKey('CongTrinh',on_delete=models.SET_NULL,null=True,blank=True,verbose_name="Công trình")
     class Meta:
         unique_together = ('employee', 'date')
         verbose_name = "Chấm công"
@@ -46,6 +46,16 @@ class Adjustment(models.Model):
         verbose_name = "Tăng giảm lương"
         verbose_name_plural = "Tăng giảm lương"
 
+class AdjustmentLog(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    amount = models.DecimalField(max_digits=12, decimal_places=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    source = models.CharField(max_length=50, default='excel')
+
+    def __str__(self):
+        return f"{self.employee.name} | {self.amount} | {self.created_at}"
 #1 bản quán lý công trình
 class CongTrinh(models.Model):
     TRANG_THAI_CHOICES = [

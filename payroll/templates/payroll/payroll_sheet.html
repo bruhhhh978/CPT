@@ -350,9 +350,16 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
                             <!-- Lương ngày -->
                             <td class="wage-col">{{ row.employee.daily_wage|floatformat:0|intcomma }} đ</td>
                         <td class="adj-col">
-                            <input type="number" 
-                                name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
-                                value="{{ row.adjustment|floatformat:0 }}" class="att-input wage-input adj-input" {% if not can_edit %}disabled{% endif %}>
+                            <div style="display:flex; gap:4px;">
+                                <input type="number" 
+                                    name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
+                                    value="{{ row.adjustment|floatformat:0 }}" 
+                                    class="att-input wage-input adj-input">
+
+                                <button type="button" onclick="openLogModal({{ row.employee.id }})">
+                                    📜
+                                </button>
+                            </div>
                         </td>
                         <td class="total-pay-col cell-total-pay">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
                         <td class="actions-col">
@@ -505,6 +512,18 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
 </div>
 {% endif %}
 
+<div id="log-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Lịch sử Tăng/Giảm</h2>
+            <button onclick="closeLogModal()" class="btn btn-close">&times;</button>
+        </div>
+
+        <div id="log-content">
+            Đang tải...
+        </div>
+    </div>
+</div>
 <script>
     function openEditModal(id, name, position, wage) {
         document.getElementById('edit-name').value = name;
@@ -688,6 +707,34 @@ document.querySelectorAll('.att-input').forEach(input => {
         input.style.color = '';
     }
 });
+
+function openLogModal(employeeId) {
+    document.getElementById('log-modal').style.display = 'block';
+
+    fetch(`/api/log-adjustment/${employeeId}/`)
+        .then(res => res.json())
+        .then(data => {
+            let html = "<table style='width:100%'>";
+            html += "<tr><th>Ngày</th><th>Số tiền tăng</th><th>Số tiền giảm</th></tr>";
+
+            data.logs.forEach(item => {
+                html += `
+                    <tr>
+                        <td>${item.ngay}</td>
+                        <td style="color:green">+${item.tang}</td>
+                        <td style="color:red">-${item.giam}</td>
+                    </tr>
+                `;
+            });
+
+            html += "</table>";
+
+            document.getElementById('log-content').innerHTML = html;
+        });
+}
+function closeLogModal() {
+    document.getElementById('log-modal').style.display = 'none';
+}
 </script>
 
 {% endblock %}

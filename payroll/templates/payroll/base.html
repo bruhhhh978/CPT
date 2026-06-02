@@ -23,8 +23,8 @@
                 <h1>Công Ty TNHH Xây Dựng CPT</h1>
             </div>
             <nav class="nav-links">
-                <a href="{% url 'payroll:payroll_sheet' %}">Bảng lương</a>
-                <a href="{% url 'payroll:payroll_statistics' %}">Thống kê</a>
+                <a href="{% url 'payroll:du_an_list' %}">Dự án</a>
+
                 {% if user.is_authenticated %}
                     {% if user.profile.role == 'manager' %}
                     <a href="{% url 'payroll:manager_dashboard' %}" style="color: #f093fb; font-weight: 600;">

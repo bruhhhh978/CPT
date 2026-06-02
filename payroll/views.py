@@ -6,7 +6,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.db.models import Sum, Q
-from .models import Employee, Attendance, Adjustment, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang
+from .models import Employee, Attendance, Adjustment, AdjustmentLog, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang
 from decimal import Decimal
 import pandas as pd
 from django.http import HttpResponse
@@ -380,6 +380,20 @@ def payroll_sheet(request):
     }
     return render(request, 'payroll/payroll_sheet.html', context)
 
+from django.http import JsonResponse
+
+def get_adjustment_logs(request, employee_id):
+    logs = AdjustmentLog.objects.filter(employee_id=employee_id).order_by('-created_at')
+
+    data = []
+    for log in logs:
+        data.append({
+        'ngay': log.created_at.strftime('%d/%m/%Y %H:%M'),
+        'tang': float(log.amount) if log.amount > 0 else 0,
+        'giam': abs(float(log.amount)) if log.amount < 0 else 0,
+    })
+
+    return JsonResponse({'logs': data})
 def payroll_statistics(request):
     # Determine if user can edit
     can_edit = False
@@ -560,7 +574,7 @@ def import_excel(request):
 
         excel_file = request.FILES['excel_file']
         wb = load_workbook(excel_file, data_only=True)
-
+        
         for ws in wb.worksheets:
             sheet_name = ws.title.strip().lower()
             if 'tổng' in sheet_name or 'tong' in sheet_name:
@@ -637,7 +651,12 @@ def import_excel(request):
                         )
                         adj.amount = adj_val
                         adj.save()
-
+                        AdjustmentLog.objects.create(
+                            employee=emp,
+                            start_date=dates[0],
+                            end_date=dates[-1],
+                            amount=adj_val
+                        )
     return redirect(reverse('payroll:payroll_sheet') + f"?date={request.POST.get('current_date', '')}")
 
 def delete_all_data(request):
@@ -704,6 +723,7 @@ def save_attendance(request):
                     att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
                     att.regular_workday = hc_val
                     att.overtime_workday = tc_val
+                    att.cong_trinh = CongTrinh.objects.get(id=request.POST.get('du_an_id'))
                     att.save()
 
             adj_name = f'adj_{emp.id}_{start_date.strftime("%Y-%m-%d")}_{end_date.strftime("%Y-%m-%d")}'
@@ -953,15 +973,19 @@ def du_an_delete(request, pk):
 
 
 @user_and_manager
+@user_and_manager
 def du_an_detail(request, pk):
-    """Chi tiết dự án"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
-    cham_cong = ChamCongHangNgay.objects.filter(cong_trinh=du_an).count()
-    nhan_vien = ChamCongHangNgay.objects.filter(cong_trinh=du_an).values('nhan_vien').distinct().count()
-    
+
+    cham_cong_qs = Attendance.objects.filter(cong_trinh=du_an)
+
+    cham_cong_count = cham_cong_qs.count()
+    nhan_vien_count = cham_cong_qs.values('employee').distinct().count()
+
+    print("DEBUG:", cham_cong_count, nhan_vien_count)
     context = {
         'du_an': du_an,
-        'cham_cong_count': cham_cong,
-        'nhan_vien_count': nhan_vien,
+        'cham_cong_count': cham_cong_count,
+        'nhan_vien_count': nhan_vien_count,
     }
     return render(request, 'payroll/du_an_detail.html', context)
