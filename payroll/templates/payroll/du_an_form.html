@@ -1,51 +1,105 @@
-{% extends "payroll/base.html" %}
-
-{% block title %}{{ title }} - Hệ Thống Quản Lý Xây Dựng{% endblock %}
+{% extends 'payroll/base.html' %}
 
 {% block content %}
-<div class="container mt-4">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0"><i class="fas fa-edit"></i> {{ title }}</h4>
-                </div>
-                <div class="card-body">
-                    <form method="POST" novalidate>
-                        {% csrf_token %}
-                        
-                        {% for field in form %}
-                            <div class="mb-3">
-                                <label class="form-label font-weight-bold">{{ field.label }}</label>
-                                {{ field }}
-                                {% if field.errors %}
-                                    <div class="text-danger small">
-                                        {{ field.errors|join:", " }}
-                                    </div>
-                                {% endif %}
-                                {% if field.help_text %}
-                                    <div class="form-text text-muted">{{ field.help_text }}</div>
-                                {% endif %}
-                            </div>
-                        {% endfor %}
+<style>
+    .form-container {
+        max-width: 800px;
+        margin: 0 auto 3rem auto;
+    }
+    .form-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+    }
+    .form-header {
+        padding: 20px 30px;
+        background: #f8fafc;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .form-body {
+        padding: 30px;
+    }
+    .form-group {
+        margin-bottom: 20px;
+    }
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--text-main);
+        font-size: 0.9rem;
+    }
+    .form-control {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        transition: all 0.2s;
+        background: #fff;
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
+    }
+    .btn-row {
+        display: flex;
+        gap: 15px;
+        margin-top: 35px;
+        padding-top: 25px;
+        border-top: 1px solid var(--border);
+    }
+    .errorlist {
+        color: #ef4444;
+        list-style: none;
+        padding: 0;
+        font-size: 0.85rem;
+        margin-top: 6px;
+        font-weight: 500;
+    }
+    textarea.form-control {
+        min-height: 120px;
+        resize: vertical;
+    }
+</style>
 
-                        <div class="d-flex justify-content-between mt-4">
-                            <a href="{% url 'payroll:du_an_list' %}" class="btn btn-secondary">
-                                <i class="fas fa-arrow-left"></i> Quay lại
-                            </a>
-                            <button type="submit" class="btn btn-success px-5">
-                                <i class="fas fa-save"></i> Lưu dữ liệu
-                            </button>
-                        </div>
-                    </form>
+<div class="form-container">
+    <div class="form-card">
+        <div class="form-header">
+            <h2 style="margin:0; font-size: 1.25rem; font-weight: 700; color: var(--text-main);">{{ title }}</h2>
+            <a href="{% url 'payroll:du_an_list' %}" style="color: var(--text-muted); font-size: 1.2rem;">
+                <i class="fas fa-times"></i>
+            </a>
+        </div>
+        <div class="form-body">
+            <form method="POST">
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="form-group">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                            {{ field.errors }}
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                <div class="btn-row">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Lưu dự án
+                    </button>
+                    <a href="{% url 'payroll:du_an_list' %}" class="btn btn-outline">
+                        Hủy bỏ
+                    </a>
                 </div>
-            </div>
+            </form>
         </div>
     </div>
 </div>
-
-<style>
-    .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25); }
-    label { font-weight: 600; color: #34495e; }
-</style>
 {% endblock %}

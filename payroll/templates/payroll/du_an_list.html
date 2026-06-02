@@ -1,327 +1,252 @@
-{% extends "payroll/base.html" %}
-{% load static %}
-{% load humanize %}
+{% extends 'payroll/base.html' %}
 
-{% block title %}Quản Lý Dự Án - Hệ Thống Quản Lý Xây Dựng{% endblock %}
-
-{% block extra_css %}
+{% block content %}
 <style>
-    /* Tối ưu hóa layout chung */
-    .page-header {
-        background: var(--card-bg);
-        padding: 1.5rem;
-        border-radius: 1rem;
-        border: 1px solid var(--border);
-        margin-bottom: 2rem;
+    /* Container layout */
+    .project-container {
+        padding: 20px;
+        background: var(--bg);
+    }
+
+    /* Re-design Toolbar */
+    .toolbar-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    }
-
-    /* Thanh lọc (Filter Bar) */
-    .filter-wrapper {
-        background: var(--glass);
-        backdrop-filter: blur(10px);
-        border-radius: 1rem;
-        padding: 1.25rem;
+        gap: 15px;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+        background: #fff;
+        padding: 15px;
+        border-radius: 12px;
         border: 1px solid var(--border);
-        margin-bottom: 1.5rem;
     }
 
-    .form-label {
-        font-size: 0.85rem;
-        font-weight: 600;
+    .toolbar-search {
+        display: flex;
+        gap: 10px;
+        flex: 1;
+        min-width: 300px;
+    }
+
+    .search-box {
+        position: relative;
+        flex: 1;
+    }
+
+    .search-box i {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
         color: var(--text-muted);
-        margin-bottom: 0.4rem;
     }
 
-    .form-control, .form-select {
-        border-radius: 0.6rem;
+    .search-box input {
+        width: 100%;
+        padding: 10px 10px 10px 35px;
+        border-radius: 8px;
         border: 1px solid var(--border);
-        padding: 0.6rem 1rem;
+        background: #fff;
+        outline: none;
         font-size: 0.9rem;
     }
 
-    /* Bảng dự án chuyên nghiệp */
-    .project-table-container {
-        background: var(--card-bg);
-        border-radius: 1rem;
+    .toolbar-search select, .toolbar-search .btn {
+        padding: 10px 15px;
+        border-radius: 8px;
         border: 1px solid var(--border);
+        background: #fff;
+        cursor: pointer;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Grid & Cards */
+    .project-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 25px;
+    }
+
+    .project-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 0;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        position: relative;
         overflow: hidden;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        height: 100%;
     }
 
-    .table { margin-bottom: 0; }
-    .table thead th {
-        background: #f8fafc;
-        color: #475569;
-        font-weight: 700;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        letter-spacing: 0.05em;
-        padding: 1rem;
-        border-bottom: 2px solid #e2e8f0;
+    .project-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     }
 
-    .table tbody td {
-        padding: 1rem;
-        vertical-align: middle;
-        color: var(--text-main);
-        border-bottom: 1px solid #f1f5f9;
+    /* Status Indicator Bar */
+    .status-bar {
+        height: 6px;
+        width: 100%;
     }
 
-    .project-name {
-        font-weight: 700;
-        color: var(--primary);
-        text-decoration: none;
-        font-size: 1rem;
-        transition: color 0.2s;
+    .project-content {
+        padding: 20px;
+        flex-grow: 1;
     }
-    .project-name:hover { color: var(--primary-hover); }
 
     .status-badge {
-        padding: 0.4rem 0.8rem;
-        border-radius: 0.5rem;
-        font-weight: 600;
+        padding: 4px 12px;
+        border-radius: 6px;
         font-size: 0.7rem;
-        letter-spacing: 0.02em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
 
-    /* Mobile Cards */
-    .project-card-mobile {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 1rem;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        transition: transform 0.2s;
+    .project-title {
+        margin: 10px 0 15px 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--text-main);
+        line-height: 1.4;
     }
-    .project-card-mobile:active { transform: scale(0.98); }
 
-    .action-btn {
-        width: 34px;
-        height: 34px;
-        display: inline-flex;
+    .project-info {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding-bottom: 20px;
+        border-bottom: 1px dashed var(--border);
+    }
+
+    .info-item {
+        display: flex;
         align-items: center;
-        justify-content: center;
-        border-radius: 0.5rem;
-        margin-left: 0.2rem;
-        transition: all 0.2s;
+        gap: 10px;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .info-item i {
+        width: 16px;
+        color: var(--primary);
+    }
+
+    .project-footer {
+        padding: 15px 20px;
+        background: #f9fafb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .empty-state {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 80px 20px;
+        background: #fff;
+        border-radius: 16px;
+        border: 2px dashed #cbd5e1;
+        width: 100%;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        color: #94a3b8;
+        margin-bottom: 20px;
+        opacity: 0.3;
+    }
+
+    @media (max-width: 640px) {
+        .toolbar-row { flex-direction: column; align-items: stretch; }
+        .toolbar-search { min-width: 0; flex-direction: column; }
+        .toolbar-search select { height: 42px; }
     }
 </style>
-{% endblock %}
 
-{% block content %}
-<div class="container-fluid mt-4 mb-4">
-    <!-- Header -->
-    <div class="page-header">
-        <h2 class="mb-0" style="color: var(--primary); font-weight: 800;">
-            <i class="fas fa-city me-2"></i> DANH SÁCH DỰ ÁN
-        </h2>
+<div class="project-container">
+    <div class="toolbar-row">
+        <form method="GET" class="toolbar-search">
+            <div class="search-box">
+                <i class="fas fa-search"></i>
+                <input type="text" name="search" value="{{ search_query }}" placeholder="Tìm tên công trình, địa điểm...">
+            </div>
+            <select name="status" onchange="this.form.submit()">
+                <option value="">Tất cả trạng thái</option>
+                {% for code, label in status_choices %}
+                <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline">
+                <i class="fas fa-filter"></i> Lọc
+            </button>
+        </form>
+        
         {% if can_edit %}
-            <a href="{% url 'payroll:du_an_create' %}" class="btn btn-primary shadow-sm">
-                <i class="fas fa-plus me-2"></i> THÊM MỚI
-            </a>
+        <a href="{% url 'payroll:du_an_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Thêm dự án mới
+        </a>
         {% endif %}
     </div>
 
-    <!-- Search & Filter Section -->
-    <div class="filter-wrapper shadow-sm">
-        <form method="GET" class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Tên hoặc địa chỉ dự án</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" name="search" class="form-control border-start-0" 
-                           placeholder="Tìm nhanh..." value="{{ search_query }}">
+    <div class="project-grid">
+        {% for item in du_an %}
+        <div class="project-card">
+            <div class="status-bar" style="background-color: {{ item.get_status_display_color }};"></div>
+            
+            <div class="project-content">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="status-badge" style="background: {{ item.get_status_display_color }}22; color: {{ item.get_status_display_color }}">
+                        <i class="fas fa-circle" style="font-size: 0.5rem; margin-right: 5px;"></i>
+                        {{ item.get_status_display }}
+                    </span>
+                    <span style="font-size: 0.75rem; color: #64748b;">ID: #{{ item.id }}</span>
+                </div>
+                
+                <h3 class="project-title">{{ item.ten_cong_trinh }}</h3>
+                
+                <div class="project-info">
+                    <div class="info-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>{{ item.dia_diem|default:"Chưa xác định địa điểm" }}</span>
+                    </div>
+                    <div class="info-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>{{ item.ngay_bat_dau|date:"d/m/Y" }} — {{ item.thoi_han_ket_thuc|date:"d/m/Y"|default:"Chưa chốt" }}</span>
+                    </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Lọc thời gian</label>
-                <select name="time_filter" class="form-select">
-                    <option value="all" {% if time_filter == 'all' %}selected{% endif %}>Tất cả thời gian</option>
-                    <option value="ngay" {% if time_filter == 'ngay' %}selected{% endif %}>Dự án hôm nay</option>
-                    <option value="tuan" {% if time_filter == 'tuan' %}selected{% endif %}>Dự án tuần này</option>
-                    <option value="thang" {% if time_filter == 'thang' %}selected{% endif %}>Dự án tháng này</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Trạng thái</label>
-                <select name="status" class="form-select">
-                    <option value="">Tất cả trạng thái</option>
-                    {% for value, label in status_choices %}
-                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-dark w-100 me-2"><i class="fas fa-filter"></i></button>
-                <a href="{% url 'payroll:du_an_list' %}" class="btn btn-outline-secondary w-100"><i class="fas fa-sync-alt"></i></a>
-            </div>
-        </form>
-    </div>
-
-    <!-- Projects List -->
-    {% if du_an %}
-        <!-- Desktop View -->
-        <div class="d-none d-lg-block">
-            <div class="project-table-container">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th style="width: 50px;">STT</th>
-                            <th>Tên Dự Án</th>
-                            <th style="width: 250px;">Địa Chỉ</th>
-                            <th style="width: 140px;">Ngày Bắt Đầu</th>
-                            <th style="width: 150px;">Trạng Thái</th>
-                            <th style="width: 130px;" class="text-center">Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for project in du_an %}
-                            <tr>
-                                <td class="text-muted fw-bold">{{ forloop.counter }}</td>
-                                <td>
-                                    <a href="{% url 'payroll:du_an_detail' project.id %}" class="project-name">
-                                        {{ project.ten_cong_trinh|upper }}
-                                    </a>
-                                </td>
-                                <td class="text-muted small"><i class="fas fa-map-marker-alt me-1"></i> {{ project.dia_diem|default:"--" }}</td>
-                                <td><span class="badge bg-light text-dark border">{{ project.ngay_bat_dau|date:"d/m/Y" }}</span></td>
-                                <td>
-                                    <span class="badge status-badge" 
-                                          style="background-color: {{ project.get_status_display_color }}">
-                                        {{ project.get_trang_thai_display }}
-                                    </span>
-                                </td>
-                                <td class="text-center">
-                                    <a href="{% url 'payroll:du_an_detail' project.id %}" 
-                                       class="action-btn btn btn-outline-info" title="Xem">
-                                        <i class="fas fa-search-plus"></i>
-                                    </a>
-                                    {% if can_edit %}
-                                        <a href="{% url 'payroll:du_an_edit' project.id %}" 
-                                           class="action-btn btn btn-outline-warning" title="Sửa">
-                                            <i class="fas fa-edit"></i>
-                                        </a>
-                                        <a href="{% url 'payroll:du_an_delete' project.id %}" 
-                                           class="action-btn btn btn-outline-danger" title="Xóa">
-                                            <i class="fas fa-trash"></i>
-                                        </a>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Mobile View -->
-        <div class="d-lg-none">
-            <div class="row g-3">
-                {% for project in du_an %}
-                    <div class="col-12">
-                        <div class="card card-project-mobile">
-                            <div class="card-body">
-                                <h5 class="card-title mb-2">
-                                    <a href="{% url 'payroll:du_an_detail' project.id %}" class="link-project">
-                                        {{ project.ten_cong_trinh }}
-                                    </a>
-                                </h5>
-                                
-                                <div class="project-info mb-2">
-                                    <div class="info-row">
-                                        <span class="info-label">Địa chỉ:</span>
-                                        <span class="info-value">{{ project.dia_diem|default:"Chưa cập nhật" }}</span>
-                                    </div>
-                                    <div class="info-row">
-                                        <span class="info-label">Ngày bắt đầu:</span>
-                                        <span class="info-value">{{ project.ngay_bat_dau|date:"d/m/Y"|default:"--" }}</span>
-                                    </div>
-                                    <div class="info-row">
-                                        <span class="info-label">Thời hạn:</span>
-                                        <span class="info-value">{{ project.thoi_han_ket_thuc|date:"d/m/Y"|default:"--" }}</span>
-                                    </div>
-                                    <div class="info-row">
-                                        <span class="info-label">Trạng thái:</span>
-                                        <span>
-                                            <span class="badge status-badge" 
-                                                  style="background-color: {{ project.get_status_display_color }}">
-                                                {{ project.get_trang_thai_display }}
-                                            </span>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div class="btn-group-mobile mt-3">
-                                    <a href="{% url 'payroll:du_an_detail' project.id %}" 
-                                       class="btn btn-sm btn-info flex-grow-1">
-                                        <i class="fas fa-eye"></i> Xem
-                                    </a>
-                                    {% if can_edit %}
-                                        <a href="{% url 'payroll:du_an_edit' project.id %}" 
-                                           class="btn btn-sm btn-warning flex-grow-1">
-                                            <i class="fas fa-edit"></i> Sửa
-                                        </a>
-                                        <a href="{% url 'payroll:du_an_delete' project.id %}" 
-                                           class="btn btn-sm btn-danger flex-grow-1">
-                                            <i class="fas fa-trash"></i> Xóa
-                                        </a>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- Summary -->
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <div class="alert alert-info" role="alert">
-                    <i class="fas fa-info-circle"></i>
-                    Tổng cộng: <strong>{{ du_an|length }}</strong> dự án
-                    {% if search_query %}
-                        (kết quả tìm kiếm: "<strong>{{ search_query }}</strong>")
+            
+            <div class="project-footer">
+                <a href="{% url 'payroll:du_an_detail' item.pk %}" class="btn btn-outline" style="font-size: 0.75rem; padding: 6px 12px;">
+                    Xem chi tiết
+                </a>
+                
+                <div class="action-group">
+                    {% if can_edit %}
+                    <a href="{% url 'payroll:du_an_edit' item.pk %}" class="btn-icon btn-edit" title="Chỉnh sửa">
+                        <i class="fas fa-pen"></i>
+                    </a>
+                    <a href="{% url 'payroll:du_an_delete' item.pk %}" class="btn-icon btn-delete" title="Xóa">
+                        <i class="fas fa-trash"></i>
+                    </a>
                     {% endif %}
                 </div>
             </div>
         </div>
-    {% else %}
-        <div class="alert alert-warning text-center py-5" role="alert">
-            <i class="fas fa-inbox fa-3x mb-3"></i>
-            <h4>Không có dự án nào</h4>
-            <p class="mb-0">
-                {% if search_query or status_filter %}
-                    Không tìm thấy dự án với tiêu chí tìm kiếm của bạn.
-                {% elif can_edit %}
-                    <a href="{% url 'payroll:du_an_create' %}" class="btn btn-primary mt-3">
-                        <i class="fas fa-plus"></i> Tạo dự án đầu tiên
-                    </a>
-                {% else %}
-                    Vui lòng liên hệ với quản lý để tạo dự án.
-                {% endif %}
-            </p>
+        {% empty %}
+        <div class="empty-state">
+            <i class="fas fa-project-diagram"></i>
+            <h3>Không tìm thấy dự án nào</h3>
+            <p>Vui lòng thử lại với từ khóa khác hoặc tạo dự án mới.</p>
         </div>
-    {% endif %}
-</div>
-
-<!-- Messages -->
-{% if messages %}
-    <div class="fixed-messages">
-        {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
         {% endfor %}
     </div>
-{% endif %}
-
-{% endblock %}
-
-{% block extra_js %}
+</div>
 {% endblock %}

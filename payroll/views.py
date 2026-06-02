@@ -884,7 +884,7 @@ def du_an_create(request):
         form = CongTrinhForm(request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Th�m d? �n th�nh c�ng!')
+            messages.success(request, 'Thêm dự án thành công!')
             return redirect('payroll:du_an_list')
         else:
             for field, errors in form.errors.items():
@@ -893,7 +893,7 @@ def du_an_create(request):
     else:
         form = CongTrinhForm()
     
-    context = {'form': form, 'title': 'Th�m d? �n m?i'}
+    context = {'form': form, 'title': 'Thêm dự án mới'}
     return render(request, 'payroll/du_an_form.html', context)
 
 
@@ -906,7 +906,7 @@ def du_an_edit(request, pk):
         form = CongTrinhForm(request.POST, instance=du_an)
         if form.is_valid():
             form.save()
-            messages.success(request, 'C?p nh?t d? �n th�nh c�ng!')
+            messages.success(request, 'Cập nhật dự án thành công!')
             return redirect('payroll:du_an_list')
         else:
             for field, errors in form.errors.items():
@@ -915,7 +915,7 @@ def du_an_edit(request, pk):
     else:
         form = CongTrinhForm(instance=du_an)
     
-    context = {'form': form, 'du_an': du_an, 'title': 'Ch?nh s?a d? �n'}
+    context = {'form': form, 'du_an': du_an, 'title': 'Chỉnh sửa dự án'}
     return render(request, 'payroll/du_an_form.html', context)
 
 
@@ -926,7 +926,7 @@ def du_an_delete(request, pk):
     
     if request.method == 'POST':
         du_an.delete()
-        messages.success(request, 'X�a d? �n th�nh c�ng!')
+        messages.success(request, 'Xóa dự án thành công!')
         return redirect('payroll:du_an_list')
     
     context = {'du_an': du_an}

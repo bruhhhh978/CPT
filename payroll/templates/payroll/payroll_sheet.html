@@ -7,14 +7,17 @@
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
 
 <style>
+/* Cải thiện Toolbar để không bị vỡ bố cục khi nhiều nút */
 .toolbar-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
     margin-bottom: 1.25rem;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    flex-wrap: wrap;
+    background: var(--glass);
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
 }
 
 /* Date group pill */
@@ -162,9 +165,18 @@
 .btn-close { padding: 0.25rem 0.5rem !important; background: none !important; border: none !important; color: var(--text-main); font-size: 1.5rem; cursor: pointer; }
 .form-hint { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; }
 .empty-state { text-align: center; padding: 4rem !important; color: var(--text-muted); }
-.empty-state i { font-size: 2rem; display: block; margin-bottom: 1rem; opacity: 0.5; }
+.empty-state i { font-size: 2.5rem; display: block; margin-bottom: 1rem; opacity: 0.5; }
 .empty-state a { color: var(--primary); font-weight: bold; text-decoration: underline; }
 .action-group { display: flex; gap: 0.5rem; justify-content: center; }
+
+/* Fix hiển thị trên mobile */
+@media (max-width: 768px) {
+    .toolbar-search { order: 2; width: 100%; }
+    .date-pill { order: 1; }
+    .nav-btn { order: 1; }
+    .sep { display: none; }
+    .toolbar-row .btn { flex: 1; justify-content: center; }
+}
 </style>
 
 <div class="card">
@@ -364,7 +376,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="23" class="empty-state">
+                        <td colspan="100%" class="empty-state">
                             <i class="fas fa-users-slash"></i>
                             {% if search_query %}
                             Không tìm thấy nhân viên phù hợp với từ khóa "{{ search_query }}".
@@ -516,16 +528,19 @@
         const viewType = this.value;
         const weekWrapper = document.getElementById('week-picker-wrapper');
         const monthWrapper = document.getElementById('month-picker-wrapper');
-        const weekNav = document.querySelector('.week-nav');
+        const weekNavPill = document.getElementById('week-nav-pill');
+        const navBtns = [document.getElementById('btn-prev'), document.getElementById('btn-next')];
 
         if (viewType === 'week') {
             weekWrapper.style.display = 'flex';
             monthWrapper.style.display = 'none';
-            weekNav.style.display = 'flex';
+            weekNavPill.style.display = 'flex';
+            navBtns.forEach(b => b.style.display = 'flex');
         } else {
             weekWrapper.style.display = 'none';
             monthWrapper.style.display = 'flex';
-            weekNav.style.display = 'none';
+            weekNavPill.style.display = 'none';
+            navBtns.forEach(b => b.style.display = 'none');
         }
     });
 

@@ -52,9 +52,11 @@
             </nav>
         </header>
 
+        {% block page_header %}
         <h2 style="text-align: center; text-transform: uppercase; margin: 1.5rem 0; font-weight: 900; letter-spacing: 0.2em; color: white; text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); font-size: 2.5rem;">
-            BẢNG CHẤM VÀ TÍNH LƯƠNG
+            HỆ THỐNG QUẢN LÝ CPT
         </h2>
+        {% endblock %}
 
         <main>
             {% block content %}{% endblock %}
