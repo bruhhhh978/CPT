@@ -1,3 +1,4 @@
+import calendar
 import datetime
 from urllib import request
 from django.http import JsonResponse
@@ -142,6 +143,15 @@ def get_available_weeks():
         days_since_friday = (d.weekday() - 4) % 7
         friday = d - datetime.timedelta(days=days_since_friday)
         weeks.add(friday)
+    return sorted(weeks)
+
+def get_weeks_in_month(date):
+    first_day = date.replace(day=1)
+    last_day = date.replace(day=calendar.monthrange(date.year, date.month)[1])
+    weeks = {
+        get_week_range(first_day + datetime.timedelta(days=i))[0]
+        for i in range((last_day - first_day).days + 1)
+    }
     return sorted(weeks)
 
 def to_symbol(val):
@@ -305,7 +315,6 @@ def payroll_sheet(request):
     search_type = get_search_type(request)
 
     if view_type == 'month':
-        import calendar
         first_day = target_date.replace(day=1)
         last_day = target_date.replace(day=calendar.monthrange(target_date.year, target_date.month)[1])
         dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
@@ -329,7 +338,17 @@ def payroll_sheet(request):
             'end': w + datetime.timedelta(days=6),
             'date_str': w.strftime('%Y-%m-%d'),
         }
-        for w in get_available_weeks()
+        for w in get_weeks_in_month(target_date)
+    ]
+    available_months = [
+        {
+            'year': target_date.year,
+            'year_str': str(target_date.year),
+            'month': month,
+            'date_str': datetime.date(target_date.year, month, 1).strftime('%Y-%m-%d'),
+            'value': f"{target_date.year}-{month:02d}",
+        }
+        for month in range(1, 13)
     ]
 
     date_headers = [
@@ -353,6 +372,7 @@ def payroll_sheet(request):
         'search_query': search_query,
         'search_type': search_type,
         'available_weeks': available_weeks,
+        'available_months': available_months,
         'view_type': view_type,
         'current_month': target_date.strftime('%m'),
         'can_edit': can_edit,
@@ -662,7 +682,6 @@ def save_attendance(request):
 
         view_type = request.POST.get('view_type', 'week')
         if view_type == 'month':
-            import calendar
             first_day = target_date.replace(day=1)
             last_day = target_date.replace(day=calendar.monthrange(target_date.year, target_date.month)[1])
             dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
@@ -879,7 +898,7 @@ def du_an_list(request):
 
 @manager_only
 def du_an_create(request):
-    """Th�m d? �n m?i"""
+    """Thêm dự án mới"""
     if request.method == 'POST':
         form = CongTrinhForm(request.POST)
         if form.is_valid():
@@ -899,7 +918,7 @@ def du_an_create(request):
 
 @manager_only
 def du_an_edit(request, pk):
-    """Ch?nh s?a d? �n"""
+    """Chỉnh sửa dự án"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
     
     if request.method == 'POST':
@@ -921,7 +940,7 @@ def du_an_edit(request, pk):
 
 @manager_only
 def du_an_delete(request, pk):
-    """X�a d? �n"""
+    """Xóa dự án"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
     
     if request.method == 'POST':
@@ -935,7 +954,7 @@ def du_an_delete(request, pk):
 
 @user_and_manager
 def du_an_detail(request, pk):
-    """Chi ti?t d? �n"""
+    """Chi tiết dự án"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
     cham_cong = ChamCongHangNgay.objects.filter(cong_trinh=du_an).count()
     nhan_vien = ChamCongHangNgay.objects.filter(cong_trinh=du_an).values('nhan_vien').distinct().count()
