@@ -567,11 +567,15 @@ def payroll_statistics(request):
         is_viewer_mode = True
         can_edit = False
     
+    search_query = request.GET.get('q', '').strip()
     target_date = get_target_date(request)
     dates = get_week_range(target_date)
     start_date, end_date = dates[0], dates[-1]
 
     employees = Employee.objects.all().order_by('name')
+    if search_query:
+        employees = employees.filter(name__icontains=search_query)
+
     payroll_data = build_weekly_payroll_data(employees, dates)
 
     total_hc = sum((row['total_hc'] for row in payroll_data), Decimal('0.0'))
@@ -624,6 +628,7 @@ def payroll_statistics(request):
         'daily_totals': daily_totals,
         'chart_rows': chart_rows,
         'available_weeks': available_weeks,
+        'search_query': search_query,
         'can_edit': can_edit,
         'is_viewer_mode': is_viewer_mode,
     }
@@ -898,6 +903,8 @@ def save_attendance(request):
                 adjustment.amount = adj_val
                 adjustment.save()
 
+        messages.success(request, 'Đã lưu dữ liệu chấm công và các khoản tăng/giảm thành công.')
+
         redirect_url = reverse('payroll:payroll_sheet') + f"?date={current_date_str}&view_type={view_type}"
         if search_query:
             redirect_url += f"&q={search_query}"
@@ -1067,81 +1074,49 @@ def du_an_list(request):
         'time_filter': time_filter,
         'status_filter': status_filter,
         'status_choices': CongTrinh.TRANG_THAI_CHOICES,
-        'can_edit': request.user.is_authenticated and request.user.profile.role in ['manager', 'user']
     }
     return render(request, 'payroll/du_an_list.html', context)
 
-
 @manager_only
 def du_an_create(request):
-    """Thêm dự án mới"""
+    """Thêm công trình mới (Chỉ quản lý)"""
     if request.method == 'POST':
         form = CongTrinhForm(request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Thêm dự án thành công!')
+            messages.success(request, 'Thêm công trình mới thành công.')
             return redirect('payroll:du_an_list')
-        else:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f'{field}: {error}')
     else:
         form = CongTrinhForm()
-    
-    context = {'form': form, 'title': 'Thêm dự án mới'}
-    return render(request, 'payroll/du_an_form.html', context)
+    return render(request, 'payroll/du_an_form.html', {'form': form, 'title': 'Thêm công trình'})
 
+@allow_viewer
+def du_an_detail(request, pk):
+    """Xem chi tiết công trình"""
+    du_an = get_object_or_404(CongTrinh, pk=pk)
+    return render(request, 'payroll/du_an_detail.html', {'du_an': du_an})
 
 @manager_only
 def du_an_edit(request, pk):
-    """Chỉnh sửa dự án"""
+    """Sửa thông tin công trình (Chỉ quản lý)"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
-    
     if request.method == 'POST':
         form = CongTrinhForm(request.POST, instance=du_an)
         if form.is_valid():
             form.save()
-            messages.success(request, 'Cập nhật dự án thành công!')
+            messages.success(request, f'Cập nhật công trình "{du_an.ten_cong_trinh}" thành công.')
             return redirect('payroll:du_an_list')
-        else:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f'{field}: {error}')
     else:
         form = CongTrinhForm(instance=du_an)
-    
-    context = {'form': form, 'du_an': du_an, 'title': 'Chỉnh sửa dự án'}
-    return render(request, 'payroll/du_an_form.html', context)
-
+    return render(request, 'payroll/du_an_form.html', {'form': form, 'title': 'Sửa công trình'})
 
 @manager_only
 def du_an_delete(request, pk):
-    """Xóa dự án"""
+    """Xóa công trình (Chỉ quản lý)"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
-    
     if request.method == 'POST':
+        ten = du_an.ten_cong_trinh
         du_an.delete()
-        messages.success(request, 'Xóa dự án thành công!')
+        messages.success(request, f'Đã xóa công trình "{ten}".')
         return redirect('payroll:du_an_list')
-    
-    context = {'du_an': du_an}
-    return render(request, 'payroll/du_an_confirm_delete.html', context)
-
-
-@user_and_manager
-@user_and_manager
-def du_an_detail(request, pk):
-    du_an = get_object_or_404(CongTrinh, pk=pk)
-
-    cham_cong_qs = Attendance.objects.filter(cong_trinh=du_an)
-
-    cham_cong_count = cham_cong_qs.count()
-    nhan_vien_count = cham_cong_qs.values('employee').distinct().count()
-
-    print("DEBUG:", cham_cong_count, nhan_vien_count)
-    context = {
-        'du_an': du_an,
-        'cham_cong_count': cham_cong_count,
-        'nhan_vien_count': nhan_vien_count,
-    }
-    return render(request, 'payroll/du_an_detail.html', context)
+    return render(request, 'payroll/du_an_confirm_delete.html', {'du_an': du_an})
