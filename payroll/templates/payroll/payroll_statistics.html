@@ -9,49 +9,55 @@
 
 {% block content %}
 <div class="stats-shell">
-    <div class="card">
-        <div class="controls">
-            <div class="date-nav">
-                <a href="#" id="btn-prev" class="btn btn-outline">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
+    <div class="card"> 
+    <div class="controls">
+        <div class="date-pill" style="display:flex; align-items:center; gap:4px; background:var(--glass); border:1px solid var(--border); border-radius:8px; padding:5px 10px; height:36px;">
+            <select id="view-type-select" style="border:none; background:transparent; color:var(--text-main); font-size:0.83rem; font-weight:600; outline:none; cursor:pointer;">
+                <option value="week"  {% if view_type == 'week'  %}selected{% endif %}>Tuần</option>
+                <option value="month" {% if view_type == 'month' %}selected{% endif %}>Tháng</option>
+            </select>
 
-                <select id="week-select" onchange="location.href=buildWeekUrl(this.value)" 
-                        style="font-weight:bold; padding: 4px 12px; border-radius: 6px; border: 1px solid #ccc; cursor:pointer;">
-                    {% for w in available_weeks %}
-                        <option value="{{ w.date_str }}"
-                            {% if w.start == start_date %}selected{% endif %}>
-                            Tuần {{ forloop.counter }}: {{ w.start|date:'d/m' }} - {{ w.end|date:'d/m/Y' }}
-                        </option>
+            <select id="period-select" style="border:none; background:transparent; color:var(--text-main); font-size:0.83rem; font-weight:600; outline:none; cursor:pointer; width:220px;">
+                {% if view_type == 'month' %}
+                    {% for m in available_months %}
+                    <option value="{{ m.date_str }}"
+                        {% if target_date|date:'Y' == m.year|stringformat:'s' and target_date|date:'n' == m.month|stringformat:'s' %}selected{% endif %}>
+                        {{ m.label }}
+                    </option>
                     {% endfor %}
-                </select>
-
-                <a href="#" id="btn-next" class="btn btn-outline">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </div>
-
-
-            <div style="flex-grow: 1;"></div>
-            <form method="GET" class="search-form">
-                <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
-                <select name="search_type" class="form-input search-type-select">
-                    <option value="name" {% if search_type == 'name' %}selected{% endif %}>Tìm theo tên</option>
-                    <option value="dob" {% if search_type == 'dob' %}selected{% endif %}>Tìm theo ngày sinh</option>
-                </select>
-                <div class="search-input-wrap">
-                    <i class="fas fa-search"></i>
-                    <input type="text" name="q" value="{{ search_query }}" placeholder="Nhập thông tin" class="search-input">
-                </div>
-                <button type="submit" class="btn btn-outline">Tìm</button>
-                {% if search_query %}
-                <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}" class="btn btn-outline">Xóa lọc</a>
+                {% else %}
+                    {% for w in available_weeks %}
+                    <option value="{{ w.date_str }}"
+                        {% if start_date == w.start %}selected{% endif %}>
+                        {{ w.label }}
+                    </option>
+                    {% endfor %}
                 {% endif %}
-            </form>
-            <a href="{% url 'payroll:payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
-                <i class="fas fa-table"></i> Về bảng lương
-            </a>
+            </select>
         </div>
+
+        <a href="#" id="btn-prev" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
+        <a href="#" id="btn-next" class="btn btn-outline"><i class="fas fa-chevron-right"></i></a>
+
+        <div style="flex-grow:1;"></div>
+
+        <form method="GET" class="search-form">
+            <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+            <input type="hidden" name="view_type" value="{{ view_type }}">
+            <div class="search-input-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên..." class="search-input">
+            </div>
+            <button type="submit" class="btn btn-outline">Tìm</button>
+            {% if search_query %}
+            <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}" class="btn btn-outline">✕</a>
+            {% endif %}
+        </form>
+
+        <a href="{% url 'payroll:payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}" class="btn btn-primary">
+            <i class="fas fa-table"></i> Về bảng lương
+        </a>
+    </div>
     </div>
 
     <div class="stats-grid">
@@ -104,39 +110,46 @@
 
         <div class="table-container">
             <table class="stats-table">
-                <thead>
-                    <tr>
-                        <th>STT</th>
-                        <th>Nhân viên</th>
-                        <th>Ngày sinh</th>
-                        <th>Nghề</th>
-                        <th>Tổng HC</th>
-                        <th>Tổng TC</th>
-                        <th>Điều chỉnh</th>
-                        <th>Tổng lãnh</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in payroll_data %}
-                    <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ row.employee.name }}</td>
-                        <td>{{ row.employee.date_of_birth|date:"d/m/Y"|default:"-" }}</td>
-                        <td>{{ row.employee.position }}</td>
-                        <td>{{ row.total_hc }}</td>
-                        <td>{{ row.total_tc }}</td>
-                        <td>{{ row.adjustment|floatformat:0|intcomma }} đ</td>
-                        <td class="total-col">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="empty-state-cell">
-                            Không có dữ liệu để thống kê trong bộ lọc hiện tại.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <thead>
+                <tr>
+                    <th>STT</th>
+                    <th>Nhân viên</th>
+                    <th>Nghề</th>
+                    <th>Tổng HC</th>
+                    <th>Tổng TC</th>
+                    <th>Điều chỉnh</th>
+                    <th>Tổng lãnh</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in payroll_data %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ row.employee.name }}</td>
+                    <td>{{ row.employee.position }}</td>
+                    <td>{{ row.total_hc }}</td>
+                    <td>{{ row.total_tc }}</td>
+                    <td>{{ row.adjustment|floatformat:0|intcomma }} đ</td>
+                    <td class="total-col">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="empty-state-cell">Không có dữ liệu.</td>
+                </tr>
+                {% endfor %}
+                {% if payroll_data %}
+                <tr style="font-weight:700; background:var(--surface, #fff8f0); border-top:2px solid var(--primary);">
+                    <td colspan="3" style="text-align:center; color:var(--primary);">
+                        <i class="fas fa-sigma"></i> TỔNG CỘNG
+                    </td>
+                    <td style="color:var(--primary);">{{ total_hc|floatformat:1 }}</td>
+                    <td>{{ total_tc|floatformat:1 }}</td>
+                    <td>—</td>
+                    <td style="color:var(--primary);">{{ total_pay|floatformat:0|intcomma }} đ</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
         </div>
     </div>
 </div>
@@ -227,49 +240,42 @@
 </script>
 
 <script>
-function buildWeekUrl(date) {
+function goToPeriod(dateStr, viewType) {
     const params = new URLSearchParams(window.location.search);
-    params.set('date', date);
-    return `?${params.toString()}`;
+    params.set('date', dateStr);
+    params.set('view_type', viewType);
+    window.location.href = '?' + params.toString();
 }
 
-function getAvailableWeeks() {
-    return Array.from(document.getElementById('week-select').options).map(opt => opt.value);
-}
+const viewTypeSelect = document.getElementById('view-type-select');
+const periodSelect = document.getElementById('period-select');
 
-function getCurrentWeek() {
-    return document.getElementById('week-select').value;
-}
+viewTypeSelect.addEventListener('change', function() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('view_type', this.value);
+    params.set('date', '{{ start_date|date:"Y-m-d" }}');
+    window.location.href = '?' + params.toString();
+});
 
-function updateNavButtons() {
-    const weeks = getAvailableWeeks();
-    const idx = weeks.indexOf(getCurrentWeek());
-
-    const btnPrev = document.getElementById('btn-prev');
-    const btnNext = document.getElementById('btn-next');
-
-    btnPrev.style.opacity = idx <= 0 ? '0.3' : '1';
-    btnPrev.style.pointerEvents = idx <= 0 ? 'none' : 'auto';
-
-    btnNext.style.opacity = idx >= weeks.length - 1 ? '0.3' : '1';
-    btnNext.style.pointerEvents = idx >= weeks.length - 1 ? 'none' : 'auto';
-}
+periodSelect.addEventListener('change', function() {
+    goToPeriod(this.value, viewTypeSelect.value);
+});
 
 document.getElementById('btn-prev').addEventListener('click', function(e) {
     e.preventDefault();
-    const weeks = getAvailableWeeks();
-    const idx = weeks.indexOf(getCurrentWeek());
-    if (idx > 0) location.href = buildWeekUrl(weeks[idx - 1]);
+    if (periodSelect.selectedIndex > 0) {
+        periodSelect.selectedIndex--;
+        goToPeriod(periodSelect.value, viewTypeSelect.value);
+    }
 });
 
 document.getElementById('btn-next').addEventListener('click', function(e) {
     e.preventDefault();
-    const weeks = getAvailableWeeks();
-    const idx = weeks.indexOf(getCurrentWeek());
-    if (idx < weeks.length - 1) location.href = buildWeekUrl(weeks[idx + 1]);
+    if (periodSelect.selectedIndex < periodSelect.options.length - 1) {
+        periodSelect.selectedIndex++;
+        goToPeriod(periodSelect.value, viewTypeSelect.value);
+    }
 });
-
-updateNavButtons();
 </script>
 
 {% endblock %}

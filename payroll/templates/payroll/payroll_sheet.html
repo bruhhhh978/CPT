@@ -46,8 +46,8 @@
     max-width: 90px;
 }
 .date-pill .period-select {
-    width: 170px;
-    max-width: 170px;
+    width: 220px;
+    max-width: 220px;
 }
 .date-pill input[type="text"] {
     font-weight: 400;
@@ -330,7 +330,7 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
                         {% for att in row.daily_attendance %}
                         <td class="hc-col">
                             <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
-                                value="{{ att.hc_symbol }}" class="att-input att-hc" data-placeholder="x / &#92;" maxlength="4" {% if not can_edit %}disabled{% endif %}>
+                                value="{{ att.hc_symbol }}" class="att-input att-hc" data-placeholder="x /" maxlength="4" {% if not can_edit %}disabled{% endif %}>
                         </td>
                         <td class="tc-col">
                             <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
@@ -351,10 +351,6 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
                                     name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
                                     value="{{ row.adjustment|floatformat:0 }}" 
                                     class="att-input wage-input adj-input">
-
-                                <button type="button" onclick="openLogModal({{ row.employee.id }})">
-                                    📜
-                                </button>
                             </div>
                         </td>
                         <td class="total-pay-col cell-total-pay">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
@@ -697,32 +693,43 @@ document.querySelectorAll('.payroll-row').forEach(function(row) {
 document.querySelectorAll('.att-input').forEach(input => {
     const placeholder = input.dataset.placeholder;
 
-    // Khi focus → hiện gợi ý nếu đang trống
     input.addEventListener('focus', function() {
         if (this.value === '') {
+            this._showingPlaceholder = true;
             this.value = placeholder;
-            this.style.color = '#999'; // màu gợi ý
+            this.style.color = '#999';
         }
     });
 
-    // Khi người dùng bắt đầu nhập → xóa gợi ý
-    input.addEventListener('input', function() {
-        if (this.value === placeholder) {
+    input.addEventListener('keydown', function() {
+        // Xóa placeholder ngay khi bắt đầu nhấn phím
+        if (this._showingPlaceholder) {
+            this._showingPlaceholder = false;
             this.value = '';
+            this.style.color = '';
+        }
+    });
+
+    input.addEventListener('input', function() {
+        if (this._showingPlaceholder) {
+            this._showingPlaceholder = false;
+            // Giữ lại ký tự vừa gõ, bỏ phần placeholder
+            const typed = this.value.replace(placeholder, '');
+            this.value = typed;
             this.style.color = '';
         } else {
             this.style.color = '';
         }
     });
 
-    // Khi blur → nếu vẫn là placeholder thì xóa đi
     input.addEventListener('blur', function() {
-        if (this.value === placeholder) {
+        if (this._showingPlaceholder || this.value === placeholder) {
+            this._showingPlaceholder = false;
             this.value = '';
+            this.style.color = '';
         }
     });
 
-    // Nếu có dữ liệu thật từ DB → hiển thị bình thường
     if (input.value !== '') {
         input.style.color = '';
     }

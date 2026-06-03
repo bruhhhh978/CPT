@@ -397,8 +397,6 @@ def build_weekly_payroll_data(employees, dates):
     return payroll_data
 
 
-
-
 def payroll_sheet(request):
     # Determine if user can edit (must be authenticated AND be manager/user)
     can_edit = False
@@ -549,8 +547,8 @@ def get_adjustment_logs(request, employee_id):
     })
 
     return JsonResponse({'logs': data})
+
 def payroll_statistics(request):
-    # Determine if user can edit
     can_edit = False
     is_viewer_mode = True
     
@@ -563,18 +561,29 @@ def payroll_statistics(request):
         except:
             messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
             return redirect('login:login')
-    else:
-        is_viewer_mode = True
-        can_edit = False
-    
     search_query = request.GET.get('q', '').strip()
     target_date = get_target_date(request)
-    dates = get_week_range(target_date)
-    start_date, end_date = dates[0], dates[-1]
+    view_type = request.GET.get('view_type', 'week').strip().lower()
+    if view_type not in ('week', 'month'):
+        view_type = 'week'
 
-    employees = Employee.objects.all().order_by('name')
+    if view_type == 'month':
+        week_start = get_week_start(target_date)
+        year, month = week_start.year, week_start.month
+        weeks_this_month = get_weeks_in_month(year, month)
+        if weeks_this_month:
+            first_day = weeks_this_month[0]
+            last_day = weeks_this_month[-1] + datetime.timedelta(days=6)
+            dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
+        else:
+            dates = get_week_range(target_date)
+    else:
+        dates = get_week_range(target_date)
+    SUMMARY_NAMES = ['Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ']
+    employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
     if search_query:
         employees = employees.filter(name__icontains=search_query)
+    start_date, end_date = dates[0], dates[-1]
 
     payroll_data = build_weekly_payroll_data(employees, dates)
 
@@ -607,17 +616,32 @@ def payroll_statistics(request):
         for row in payroll_data
     ]
 
+    all_weeks_raw = get_available_weeks()
     available_weeks = [
         {
             'start': w,
             'end': w + datetime.timedelta(days=6),
             'date_str': w.strftime('%Y-%m-%d'),
+            'label': f"Tuần {i:02d}: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}",
         }
-        for w in get_available_weeks()
+        for i, w in enumerate(all_weeks_raw, start=1)
     ]
+    available_months = []
+    for (year, month) in get_available_months():
+        weeks_in_m = get_weeks_in_month(year, month)
+        first_week_str = weeks_in_m[0].strftime('%Y-%m-%d') if weeks_in_m else f'{year}-{month:02d}-01'
+        available_months.append({
+            'year': year,
+            'month': month,
+            'date_str': first_week_str,
+            'label': f"Tháng {month:02d}/{year}",
+        })
+
     context = {
         'start_date': start_date,
         'end_date': end_date,
+        'target_date': target_date,
+        'view_type': view_type,
         'prev_week': start_date - datetime.timedelta(days=7),
         'next_week': start_date + datetime.timedelta(days=7),
         'payroll_data': payroll_data,
@@ -628,6 +652,7 @@ def payroll_statistics(request):
         'daily_totals': daily_totals,
         'chart_rows': chart_rows,
         'available_weeks': available_weeks,
+        'available_months': available_months,
         'search_query': search_query,
         'can_edit': can_edit,
         'is_viewer_mode': is_viewer_mode,
@@ -731,13 +756,14 @@ def import_excel(request):
         excel_file = request.FILES['excel_file']
         wb = load_workbook(excel_file, data_only=True)
         
+        first_target_date = None  
+
         for ws in wb.worksheets:
             sheet_name = ws.title.strip().lower()
             if 'tổng' in sheet_name or 'tong' in sheet_name:
                 continue
 
             header_text = str(ws['G1'].value or '')
-
             date_matches = re.findall(r'(\d{1,2}/\d{1,2}/(?:\d{4}|\d{2}))', header_text)
 
             if not date_matches:
@@ -752,6 +778,9 @@ def import_excel(request):
             except Exception:
                 continue
             
+            if first_target_date is None:  
+                first_target_date = target_date  
+
             dates = get_week_range(target_date)
             for row in ws.iter_rows(min_row=6):
                 name = row[1].value
@@ -767,7 +796,7 @@ def import_excel(request):
                     emp.position = position
                     emp.save()
 
-                col_idx = 3  # Cột D = index 3
+                col_idx = 3
                 for d in dates:
                     hc_val = from_symbol(row[col_idx].value)
                     tc_raw = row[col_idx + 1].value
@@ -782,7 +811,6 @@ def import_excel(request):
                     att.save()
                     col_idx += 2
 
-                # Lương ngày - cột T (index 19)
                 wage = row[19].value
                 if wage:
                     try:
@@ -791,7 +819,6 @@ def import_excel(request):
                         pass
                     emp.save()
 
-                # Tăng/giảm - cột U (index 20)
                 adj_val_raw = row[20].value
                 if adj_val_raw:
                     try:
@@ -813,7 +840,10 @@ def import_excel(request):
                             end_date=dates[-1],
                             amount=adj_val
                         )
-    return redirect(reverse('payroll:payroll_sheet') + f"?date={request.POST.get('current_date', '')}")
+
+    # <-- sửa dòng redirect
+    redirect_date = first_target_date.strftime('%Y-%m-%d') if first_target_date else request.POST.get('current_date', '')
+    return redirect(reverse('payroll:payroll_sheet') + f"?date={redirect_date}")
 
 def delete_all_data(request):
     # Check authorization - only managers can delete all
@@ -1092,10 +1122,19 @@ def du_an_create(request):
 
 @allow_viewer
 def du_an_detail(request, pk):
-    """Xem chi tiết công trình"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
-    return render(request, 'payroll/du_an_detail.html', {'du_an': du_an})
-
+    
+    # Đếm từ Attendance (model cũ đang có dữ liệu thực)
+    from .models import Attendance
+    cham_cong_qs = Attendance.objects.filter(cong_trinh=du_an)
+    cham_cong_count = cham_cong_qs.count()
+    nhan_vien_count = cham_cong_qs.values('employee').distinct().count()
+    
+    return render(request, 'payroll/du_an_detail.html', {
+        'du_an': du_an,
+        'cham_cong_count': cham_cong_count,
+        'nhan_vien_count': nhan_vien_count,
+    })
 @manager_only
 def du_an_edit(request, pk):
     """Sửa thông tin công trình (Chỉ quản lý)"""
