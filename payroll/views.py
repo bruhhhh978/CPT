@@ -425,10 +425,15 @@ def payroll_sheet(request):
         view_type = 'week'
 
     search_query = request.GET.get('q', '').strip()
+    SUMMARY_NAMES = ['Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ']
     if search_query:
-        employees = Employee.objects.filter(name__icontains=search_query).order_by('name')
+        employees = Employee.objects.filter(
+            name__icontains=search_query
+        ).exclude(name__in=SUMMARY_NAMES).order_by('name')
     else:
-        employees = Employee.objects.all().order_by('name')
+        employees = Employee.objects.exclude(
+            name__in=SUMMARY_NAMES
+        ).order_by('name')
     search_type = get_search_type(request)
 
     if view_type == 'month':
@@ -454,7 +459,6 @@ def payroll_sheet(request):
             return redirect('login:login')
         return export_payroll_excel(dates, start_date, end_date, view_type)
 
-    employees = get_filtered_employees(search_query, search_type)
     payroll_data = build_weekly_payroll_data(employees, dates)
     all_weeks_raw = get_available_weeks()
     available_weeks = [
@@ -488,6 +492,25 @@ def payroll_sheet(request):
         for d in dates
     ]
 
+    summary_daily = []
+    for i, d in enumerate(dates):
+        day_hc = Decimal('0.0')
+        day_tc = Decimal('0.0')
+        for row in payroll_data:
+            att = row['daily_attendance'][i]
+            # parse lại từ symbol
+            hc_sym = att['hc_symbol']
+            tc_sym = att['tc_symbol']
+            if hc_sym == 'x':   day_hc += Decimal('1.0')
+            elif hc_sym == '/': day_hc += Decimal('0.5')
+            if tc_sym:
+                try: day_tc += Decimal(str(tc_sym))
+                except: pass
+        summary_daily.append({'hc': day_hc, 'tc': day_tc})
+
+    summary_total_hc  = sum(r['total_hc']  for r in payroll_data)
+    summary_total_tc  = sum(r['total_tc']  for r in payroll_data)
+    summary_total_pay = sum(r['total_pay'] for r in payroll_data)
     context = {
         'target_date': target_date,
         'dates': dates,
@@ -505,6 +528,10 @@ def payroll_sheet(request):
         'current_month': target_date.strftime('%m'),
         'can_edit': can_edit,
         'is_viewer_mode': is_viewer_mode,
+        'summary_daily'    : summary_daily,
+        'summary_total_hc' : summary_total_hc,
+        'summary_total_tc' : summary_total_tc,
+        'summary_total_pay': summary_total_pay,
     }
     return render(request, 'payroll/payroll_sheet.html', context)
 
@@ -847,7 +874,12 @@ def save_attendance(request):
                     att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
                     att.regular_workday = hc_val
                     att.overtime_workday = tc_val
-                    att.cong_trinh = CongTrinh.objects.get(id=request.POST.get('du_an_id'))
+                    du_an_id = request.POST.get('du_an_id')
+                    if du_an_id:
+                        try:
+                            att.cong_trinh = CongTrinh.objects.get(id=du_an_id)
+                        except CongTrinh.DoesNotExist:
+                            pass
                     att.save()
 
             adj_name = f'adj_{emp.id}_{start_date.strftime("%Y-%m-%d")}_{end_date.strftime("%Y-%m-%d")}'
@@ -868,7 +900,7 @@ def save_attendance(request):
 
         redirect_url = reverse('payroll:payroll_sheet') + f"?date={current_date_str}&view_type={view_type}"
         if search_query:
-            redirect_url += f"&q={search_query}&search_type={request.POST.get('search_type', 'name')}"
+            redirect_url += f"&q={search_query}"
         return redirect(redirect_url)
 
     return redirect('payroll:payroll_sheet')
