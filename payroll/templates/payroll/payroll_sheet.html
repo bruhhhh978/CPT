@@ -337,11 +337,8 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
                                 value="{{ att.tc_symbol }}" class="att-input att-tc" data-placeholder="0.0" maxlength="6" {% if not can_edit %}disabled{% endif %}>
                         </td>
                         {% endfor %}
-                            <!-- Tổng HC -->
-                            <td class="total-hc-col cell-total-hc">{{ row.total_hc }}</td>
-
-                            <!-- Tổng TC -->
-                            <td class="total-tc-col cell-total-tc">{{ row.total_tc }}</td>
+                            <td class="total-hc-col cell-total-hc">{{ row.total_hc|floatformat:"0" }}</td>
+                            <td class="total-tc-col cell-total-tc">{{ row.total_tc|floatformat:"0" }}</td>
 
                             <!-- Lương ngày -->
                             <td class="wage-col">{{ row.employee.daily_wage|floatformat:0|intcomma }} đ</td>
@@ -390,14 +387,14 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
                         </td>
                         {% for sd in summary_daily %}
                         <td class="hc-col" style="color: var(--primary);">
-                            {{ sd.hc|floatformat:"-1" }}
+                            {{ sd.hc|floatformat:"0" }}
                         </td>
                         <td class="tc-col" style="color: #888;">
-                            {% if sd.tc %}{{ sd.tc|floatformat:"-1" }}{% endif %}
+                            {% if sd.tc %}{{ sd.tc|floatformat:"0" }}{% endif %}
                         </td>
                         {% endfor %}
-                        <td class="total-hc-col" style="color: var(--primary);">{{ summary_total_hc|floatformat:1 }}</td>
-                        <td class="total-tc-col">{{ summary_total_tc|floatformat:1 }}</td>
+                        <td class="total-hc-col" style="color: var(--primary);">{{ summary_total_hc|floatformat:"0" }}</td>
+                        <td class="total-tc-col">{{ summary_total_tc|floatformat:"0" }}</td>
                         <td class="wage-col">—</td>
                         <td class="adj-col">—</td>
                         <td class="total-pay-col" style="color: var(--primary);">
@@ -672,8 +669,8 @@ function recalcRow(row) {
     const cellTc  = row.querySelector('.cell-total-tc');
     const cellPay = row.querySelector('.cell-total-pay');
 
-    if (cellHc)  cellHc.textContent  = totalHc;
-    if (cellTc)  cellTc.textContent  = totalTc;
+    if (cellHc)  cellHc.textContent  = Number.isInteger(totalHc) ? totalHc : totalHc.toFixed(1);
+    if (cellTc)  cellTc.textContent  = Number.isInteger(totalTc) ? totalTc : totalTc.toFixed(1);
     if (cellPay) {
         cellPay.textContent  = formatVND(totalPay);
         cellPay.style.color      = totalPay > 0 ? 'var(--primary)' : '';

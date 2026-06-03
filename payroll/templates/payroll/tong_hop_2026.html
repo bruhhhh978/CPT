@@ -1,0 +1,280 @@
+{% extends 'payroll/base.html' %}
+{% load humanize %}
+
+{% block title %}Bảng Tổng Hợp 2026 - CPT{% endblock %}
+
+{% block extra_head %}
+<style>
+.th-shell { padding: 0 1rem 2rem; }
+
+.th-header-card {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    color: #fff;
+    border-radius: 14px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    box-shadow: 0 6px 24px rgba(249,115,22,.25);
+}
+.th-header-card h2 { font-size:1.25rem; font-weight:700; margin:0 0 .2rem; }
+.th-header-card .th-sub { font-size:.82rem; opacity:.85; }
+.th-header-card .th-actions { display:flex; gap:.6rem; flex-wrap:wrap; }
+.btn-white {
+    background:#fff; color:var(--primary); border:none;
+    padding:.45rem 1rem; border-radius:8px; font-weight:600; font-size:.83rem;
+    cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem;
+    transition:box-shadow .15s;
+}
+.btn-white:hover { box-shadow:0 4px 14px rgba(0,0,0,.18); }
+.btn-outline-white {
+    background:transparent; color:#fff; border:1.5px solid rgba(255,255,255,.6);
+    padding:.45rem 1rem; border-radius:8px; font-weight:600; font-size:.83rem;
+    cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem;
+    transition:background .15s;
+}
+.btn-outline-white:hover { background:rgba(255,255,255,.15); }
+
+.th-stats {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:.75rem; margin-bottom:1.25rem;
+}
+.th-stat {
+    background:#ffffff; border:1px solid var(--border,#e5e7eb);
+    border-radius:10px; padding:.9rem 1.1rem; text-align:center;
+    box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+.th-stat .label { font-size:.72rem; color:var(--text-muted,#6b7280); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+.th-stat .value { font-size:1.4rem; font-weight:800; color:var(--primary,#f97316); display:block; margin-top:.2rem; }
+.th-stat.accent { background:linear-gradient(135deg,#fff7ed,#ffedd5); border-color:#fed7aa; }
+
+.th-toolbar { display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; margin-bottom:1rem; }
+.th-search { flex:1; min-width:200px; position:relative; }
+.th-search input {
+    width:100%; padding:.45rem .9rem .45rem 2.2rem;
+    border:1px solid var(--border,#e5e7eb); border-radius:8px;
+    font-size:.83rem; background:#fff; color:var(--text-main,#111);
+    outline:none; box-sizing:border-box;
+}
+.th-search input:focus { border-color:var(--primary); }
+.th-search i { position:absolute; left:.7rem; top:50%; transform:translateY(-50%); color:var(--text-muted,#9ca3af); font-size:.8rem; }
+
+.th-table-outer { position:relative; }
+.th-table-wrap {
+    overflow-x:auto; border-radius:12px;
+    border:1px solid var(--border,#e5e7eb); background:#fff;
+}
+.th-table { border-collapse:collapse; width:100%; font-size:.82rem; min-width:700px; }
+.th-table thead tr th {
+    background:#fff7ed; color:#7c2d12;
+    font-weight:700; 
+    font-size:.72rem;
+    text-transform:uppercase; letter-spacing:.03em;
+    padding:.65rem .6rem; white-space:nowrap;
+    border-bottom:2px solid #fed7aa;
+    text-align:center;
+}
+.th-table thead tr:last-child th {
+    font-size:.7rem; color:#7c2d12; padding:.3rem .5rem;
+    border-bottom:2px solid #fed7aa; background:#fff7ed;
+}
+.th-table td {
+    padding:.5rem .6rem; border-bottom:1px solid var(--border,#f3f4f6);
+    vertical-align:middle; text-align:center; white-space:nowrap;
+}
+.th-table td:nth-child(2) { text-align:left; font-weight:600; }
+.th-table tbody tr:hover { background:#fff7ed; }
+.th-table tbody tr:last-child td { border-bottom:none; }
+
+.nghe-badge { display:inline-block; padding:.1rem .55rem; border-radius:20px; font-size:.7rem; font-weight:700; }
+.nghe-badge.cai { background:#fef3c7; color:#92400e; }
+.nghe-badge.tho { background:#dbeafe; color:#1d4ed8; }
+.nghe-badge.phu { background:#f3f4f6; color:#374151; }
+.nghe-badge.dn  { background:#f0fdf4; color:#166534; }
+
+.wk-cell { min-width:46px; }
+.wk-val  { font-weight:700; color:var(--primary,#f97316); }
+.wk-zero { color:#d1d5db; }
+
+.tong-row td {
+    background:linear-gradient(90deg,#fff7ed,#ffedd5) !important;
+    font-weight:800; color:#7c2d12 !important;
+    border-top:2px solid #fed7aa !important;
+}
+td.luong-col { font-weight:700; color:var(--primary,#f97316); text-align:right; padding-right:.8rem; }
+th.luong-col { text-align:right; padding-right:.8rem; }
+
+@media print {
+    .th-header-card .th-actions,.th-toolbar { display:none; }
+    .th-table-wrap { border:none; }
+    .th-table { font-size:.7rem; }
+}
+@media (max-width:600px) {
+    .th-header-card { flex-direction:column; align-items:flex-start; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="th-shell">
+
+    <div class="th-header-card">
+        <div>
+            <div class="th-sub">{{ ten_cty }} — {{ khoang_tg }}</div>
+            <h2>📋 {{ ten_bang }}</h2>
+            <div class="th-sub">🏗️ {{ ten_ct }}</div>
+        </div>
+        <div class="th-actions">
+            <a href="{% url 'payroll:payroll_statistics' %}?date={{ tuan_cols.0.week_start|date:'Y-m-d' }}&view_type=week" 
+            class="btn-outline-white">
+                <i class="fas fa-chart-bar"></i> Thống kê
+            </a>
+            <a href="{% url 'payroll:payroll_sheet' %}?date={{ tuan_cols.0.week_start|date:'Y-m-d' }}&view_type=week" 
+            class="btn-outline-white">
+                <i class="fas fa-table"></i> Bảng lương
+            </a>
+            <button onclick="window.print()" class="btn-white">
+                <i class="fas fa-print"></i> In bảng
+            </button>
+        </div>
+    </div>
+
+    <div class="th-stats">
+        <div class="th-stat">
+            <span class="label">Số nhân viên</span>
+            <strong class="value">{{ so_nv }}</strong>
+        </div>
+        <div class="th-stat">
+            <span class="label">Số tuần</span>
+            <strong class="value">{{ tuan_cols|length }}</strong>
+        </div>
+        <div class="th-stat">
+            <span class="label">Tổng công (HC)</span>
+            <strong class="value">{{ grand_cong|floatformat:"0" }}</strong>
+        </div>
+        <div class="th-stat accent">
+            <span class="label">Tổng chi lương</span>
+            <strong class="value" style="font-size:1.1rem;">{{ grand_luong|floatformat:0|intcomma }} đ</strong>
+        </div>
+    </div>
+
+    <div class="th-toolbar">
+        <div class="th-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="search-input" placeholder="Tìm nhân viên..." oninput="filterTable()">
+        </div>
+        <select id="filter-nghe" onchange="filterTable()"
+                style="padding:.45rem .8rem; border:1px solid var(--border,#e5e7eb); border-radius:8px; font-size:.83rem; background:var(--glass,#fff); color:var(--text-main,#111); outline:none; cursor:pointer;">
+            <option value="">Tất cả nghề</option>
+            <option value="Cai">Cai</option>
+            <option value="Thợ">Thợ</option>
+            <option value="Phụ">Phụ</option>
+            <option value="ĐN">ĐN</option>
+        </select>
+        <span id="row-count" style="font-size:.8rem; color:var(--text-muted,#6b7280); white-space:nowrap;">
+            {{ so_nv }} nhân viên
+        </span>
+    </div>
+
+    <div class="th-table-outer">
+        <div class="th-table-wrap">
+            <table class="th-table" id="main-table">
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="width:36px;">STT</th>
+                        <th rowspan="2" style="min-width:140px; text-align:left;">Họ và tên</th>
+                        <th rowspan="2">Nghề</th>
+                        <th rowspan="2" class="luong-col">Lương ngày</th>
+                        {% for t in tuan_cols %}
+                        <th class="wk-cell">{{ t.label }}</th>
+                        {% endfor %}
+                        <th rowspan="2" style="background:#fefce8; color:#713f12; min-width:55px; border-left:2px solid #fbbf24;">Tổng<br>công</th>
+                        <th rowspan="2" class="luong-col" style="background:#fff7ed; color:#7c2d12; min-width:100px; border-left:2px solid #fed7aa;">Tổng lương</th>
+                    </tr>
+                    <tr>
+                        {% for t in tuan_cols %}
+                        <th class="wk-cell" title="{{ t.date }}">{{ t.date }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    {% for emp in employees %}
+                    <tr class="emp-row"
+                        data-name="{{ emp.ten|lower }}"
+                        data-nghe="{{ emp.nghe }}">
+                        <td style="color:var(--text-muted,#9ca3af);">{{ forloop.counter }}</td>
+                        <td>{{ emp.ten }}</td>
+                        <td>
+                            {% if emp.nghe == 'Cai' %}<span class="nghe-badge cai">Cai</span>
+                            {% elif emp.nghe == 'Thợ' %}<span class="nghe-badge tho">Thợ</span>
+                            {% elif emp.nghe == 'Phụ' %}<span class="nghe-badge phu">Phụ</span>
+                            {% elif emp.nghe == 'ĐN' %}<span class="nghe-badge dn">ĐN</span>
+                            {% else %}{{ emp.nghe }}{% endif %}
+                        </td>
+                        <td class="luong-col">{{ emp.luong_ngay|intcomma }}</td>
+                        {% for val in emp.week_vals %}
+                        <td class="wk-cell">
+                            {% if val %}
+                                <span class="wk-val">{{ val|floatformat:"0" }}</span>
+                            {% else %}
+                                <span class="wk-zero">—</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="font-weight:800; color:#b45309; border-left:2px solid #fbbf24;">
+                            {% if emp.tong_cong %}{{ emp.tong_cong|floatformat:"0" }}{% else %}—{% endif %}
+                        </td>
+                        <td class="luong-col" style="border-left:2px solid #86efac;">
+                            {{ emp.tong_luong|floatformat:0|intcomma }} đ
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ tuan_cols|length|add:6 }}" style="text-align:center; padding:2rem; color:var(--text-muted,#6b7280);">
+                            Không có dữ liệu
+                        </td>
+                    </tr>
+                    {% endfor %}
+
+                    <!-- Hàng tổng -->
+                    {% if employees %}
+                    <tr class="tong-row" id="total-row">
+                        <td colspan="3" style="text-align:center; font-weight:800;">∑ TỔNG CỘNG</td>
+                        <td class="luong-col">—</td>
+                        {% for total in col_totals %}
+                        <td class="wk-cell">
+                            <strong>{% if total %}{{ total|floatformat:"0" }}{% else %}—{% endif %}</strong>
+                        </td>
+                        {% endfor %}
+                        <td style="font-weight:900; color:#b45309; border-left:2px solid #fbbf24;">{{ grand_cong|floatformat:"0" }}</td>
+                        <td class="luong-col" style="border-left:2px solid #86efac;">{{ grand_luong|floatformat:0|intcomma }} đ</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function filterTable() {
+    const q = (document.getElementById('search-input').value || '').toLowerCase().trim();
+    const nghe = (document.getElementById('filter-nghe').value || '').toLowerCase();
+    const rows = document.querySelectorAll('#table-body .emp-row');
+    let visible = 0;
+    rows.forEach(row => {
+        const matchName = !q || (row.dataset.name || '').includes(q);
+        const matchNghe = !nghe || (row.dataset.nghe || '').toLowerCase() === nghe;
+        if (matchName && matchNghe) { row.style.display = ''; visible++; }
+        else { row.style.display = 'none'; }
+    });
+    document.getElementById('row-count').textContent = visible + ' nhân viên';
+    const totalRow = document.getElementById('total-row');
+    if (totalRow) totalRow.style.display = (q || nghe) ? 'none' : '';
+}
+</script>
+{% endblock %}

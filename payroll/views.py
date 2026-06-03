@@ -24,6 +24,7 @@ from datetime import timedelta
 from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
 import datetime
 import calendar
+from decimal import Decimal, ROUND_HALF_UP
 # ============ MANAGER DASHBOARD & USER MANAGEMENT ============
 
 @manager_only
@@ -388,8 +389,8 @@ def build_weekly_payroll_data(employees, dates):
         payroll_data.append({
             'employee': emp,
             'daily_attendance': daily_atts,
-            'total_hc': total_hc,
-            'total_tc': total_tc,
+            'total_hc': total_hc.quantize(Decimal('1'), rounding=ROUND_HALF_UP),
+            'total_tc': total_tc.quantize(Decimal('1'), rounding=ROUND_HALF_UP),
             'adjustment': adjustment_val,
             'total_pay': total_pay
         })
@@ -506,8 +507,8 @@ def payroll_sheet(request):
                 except: pass
         summary_daily.append({'hc': day_hc, 'tc': day_tc})
 
-    summary_total_hc  = sum(r['total_hc']  for r in payroll_data)
-    summary_total_tc  = sum(r['total_tc']  for r in payroll_data)
+    summary_total_hc  = sum(r['total_hc'] for r in payroll_data).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    summary_total_tc  = sum(r['total_tc'] for r in payroll_data).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
     summary_total_pay = sum(r['total_pay'] for r in payroll_data)
     context = {
         'target_date': target_date,
@@ -1124,16 +1125,20 @@ def du_an_create(request):
 def du_an_detail(request, pk):
     du_an = get_object_or_404(CongTrinh, pk=pk)
     
-    # Đếm từ Attendance (model cũ đang có dữ liệu thực)
     from .models import Attendance
     cham_cong_qs = Attendance.objects.filter(cong_trinh=du_an)
     cham_cong_count = cham_cong_qs.count()
     nhan_vien_count = cham_cong_qs.values('employee').distinct().count()
     
+    # Thêm phần này
+    all_weeks = get_available_weeks()
+    latest_week = all_weeks[-1].strftime('%Y-%m-%d') if all_weeks else None
+    
     return render(request, 'payroll/du_an_detail.html', {
         'du_an': du_an,
         'cham_cong_count': cham_cong_count,
         'nhan_vien_count': nhan_vien_count,
+        'latest_week': latest_week,  # thêm dòng này
     })
 @manager_only
 def du_an_edit(request, pk):
@@ -1159,3 +1164,108 @@ def du_an_delete(request, pk):
         messages.success(request, f'Đã xóa công trình "{ten}".')
         return redirect('payroll:du_an_list')
     return render(request, 'payroll/du_an_confirm_delete.html', {'du_an': du_an})
+
+@allow_viewer
+def tong_hop_2026(request):
+    """Tổng hợp ngày công 2026 - đọc từ DB (đã import từ Excel)"""
+    from itertools import groupby
+
+    # Lấy tất cả tuần có dữ liệu, sắp xếp theo thứ tự
+    all_weeks = get_available_weeks()  # list các ngày T6 đầu tuần
+
+    if not all_weeks:
+        messages.error(request, 'Chưa có dữ liệu. Vui lòng import file Excel trước.')
+        return redirect('payroll:payroll_statistics')
+
+    # Lấy tất cả nhân viên (trừ tên tổng hợp)
+    SUMMARY_NAMES = ['Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ']
+    employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
+
+    # Tạo danh sách cột tuần
+    tuan_cols = [
+        {
+            'col'  : i,
+            'label': f'T{i+1:02d}',
+            'date' : f"{w.strftime('%d/%m')}",
+            'week_start': w,
+            'week_end'  : w + datetime.timedelta(days=6),
+        }
+        for i, w in enumerate(all_weeks)
+    ]
+
+    # Đọc toàn bộ attendance một lần (tối ưu query)
+    start = all_weeks[0]
+    end   = all_weeks[-1] + datetime.timedelta(days=6)
+    all_atts = Attendance.objects.filter(
+        date__range=(start, end)
+    ).select_related('employee')
+
+    # Map: {employee_id: {date: attendance}}
+    att_map = {}
+    for att in all_atts:
+        att_map.setdefault(att.employee_id, {})[att.date] = att
+
+    # Đọc tất cả adjustment
+    all_adjs = Adjustment.objects.filter(
+        start_date__gte=start, end_date__lte=end
+    ).select_related('employee')
+    adj_map = {}
+    for adj in all_adjs:
+        adj_map[(adj.employee_id, adj.start_date)] = adj.amount
+
+    # Xây dựng dữ liệu từng nhân viên
+    employee_rows = []
+    col_totals  = [0.0] * len(tuan_cols)
+    grand_cong  = 0.0
+    grand_luong = 0.0
+
+    for emp in employees:
+        emp_atts = att_map.get(emp.id, {})
+        week_vals = []
+        row_cong  = 0.0
+
+        for idx, t in enumerate(tuan_cols):
+            # Tổng công HC trong tuần này
+            week_cong = Decimal('0.0')
+            d = t['week_start']
+            while d <= t['week_end']:
+                att = emp_atts.get(d)
+                if att:
+                    week_cong += att.regular_workday
+                d += datetime.timedelta(days=1)
+
+            val = int(float(week_cong) + 0.5) if week_cong > 0 else None
+            week_vals.append(val)
+            if val:
+                row_cong        += val
+                col_totals[idx] += val
+
+        tong_luong_nv = row_cong * float(emp.daily_wage)
+        row_cong = round(row_cong, 1)
+        grand_cong   += row_cong
+        grand_luong  += tong_luong_nv
+        employee_rows.append({
+            'ten'       : emp.name,
+            'nghe'      : emp.position,
+            'luong_ngay': int(emp.daily_wage),
+            'week_vals' : week_vals,
+            'tong_cong' : row_cong,
+            'tong_luong': tong_luong_nv,
+        })
+
+    # Chỉ giữ nhân viên có ít nhất 1 ngày công
+    employee_rows = [e for e in employee_rows if e['tong_cong'] > 0]
+
+    context = {
+        'ten_cty'    : 'CTY CP XÂY DỰNG CPT',
+        'ten_bang'   : 'BẢNG TỔNG HỢP NGÀY CÔNG',
+        'khoang_tg'  : f"{all_weeks[0].strftime('%d/%m/%Y')} - {end.strftime('%d/%m/%Y')}",
+        'ten_ct'     : 'NHÀ PHỐ - A.LÂM - CỒN KHƯƠNG',
+        'tuan_cols'  : tuan_cols,
+        'employees'  : employee_rows,
+        'col_totals' : col_totals,
+        'grand_cong' : grand_cong,
+        'grand_luong': grand_luong,
+        'so_nv'      : len(employee_rows),
+    }
+    return render(request, 'payroll/tong_hop_2026.html', context)

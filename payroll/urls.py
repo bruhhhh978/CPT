@@ -31,4 +31,5 @@ urlpatterns = [
     path('projects/<int:pk>/', views.du_an_detail, name='du_an_detail'),
     path('projects/<int:pk>/edit/', views.du_an_edit, name='du_an_edit'),
     path('projects/<int:pk>/delete/', views.du_an_delete, name='du_an_delete'),
+    path('tong-hop-2026/', views.tong_hop_2026, name='tong_hop_2026'),
 ]

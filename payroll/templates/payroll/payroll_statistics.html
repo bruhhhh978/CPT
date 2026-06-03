@@ -34,8 +34,12 @@
                     {% endfor %}
                 {% endif %}
             </select>
+            
         </div>
-
+        <a href="{% url 'payroll:tong_hop_2026' %}" class="btn btn-primary"
+                style="background:var(--primary); border-color:var(--primary);">
+                    <i class="fas fa-list-alt"></i> Tổng hợp 2026
+        </a>
         <a href="#" id="btn-prev" class="btn btn-outline"><i class="fas fa-chevron-left"></i></a>
         <a href="#" id="btn-next" class="btn btn-outline"><i class="fas fa-chevron-right"></i></a>
 
@@ -127,8 +131,8 @@
                     <td>{{ forloop.counter }}</td>
                     <td>{{ row.employee.name }}</td>
                     <td>{{ row.employee.position }}</td>
-                    <td>{{ row.total_hc }}</td>
-                    <td>{{ row.total_tc }}</td>
+                    <td>{{ row.total_hc|floatformat:"0" }}</td>
+                    <td>{{ row.total_tc|floatformat:"0" }}</td>
                     <td>{{ row.adjustment|floatformat:0|intcomma }} đ</td>
                     <td class="total-col">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
                 </tr>
@@ -142,8 +146,8 @@
                     <td colspan="3" style="text-align:center; color:var(--primary);">
                         <i class="fas fa-sigma"></i> TỔNG CỘNG
                     </td>
-                    <td style="color:var(--primary);">{{ total_hc|floatformat:1 }}</td>
-                    <td>{{ total_tc|floatformat:1 }}</td>
+                    <td style="color:var(--primary);">{{ total_hc|floatformat:"0" }}</td>
+                    <td>{{ total_tc|floatformat:"0" }}</td>
                     <td>—</td>
                     <td style="color:var(--primary);">{{ total_pay|floatformat:0|intcomma }} đ</td>
                 </tr>
