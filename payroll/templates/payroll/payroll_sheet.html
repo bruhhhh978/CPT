@@ -208,21 +208,23 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
     <!-- 1. View type + period filter -->
     <div class="date-pill">
         <select id="view-type-select" title="Chọn kiểu lọc">
-            <option value="week" {% if view_type == 'week' %}selected{% endif %}>Tuần</option>
+            <option value="week"  {% if view_type == 'week'  %}selected{% endif %}>Tuần</option>
             <option value="month" {% if view_type == 'month' %}selected{% endif %}>Tháng</option>
         </select>
 
         <select id="period-select" class="period-select" title="Chọn kỳ">
-            {% if view_type == 'week' %}
-                {% for w in available_weeks %}
-                <option value="{{ w.date_str }}" {% if w.start == start_date %}selected{% endif %}>
-                    Tuần {{ forloop.counter }}: {{ w.start|date:'d/m' }} - {{ w.end|date:'d/m' }}
+            {% if view_type == 'month' %}
+                {% for m in available_months %}
+                <option value="{{ m.date_str }}"
+                    {% if target_date|date:'Y' == m.year|stringformat:'s' and target_date|date:'n' == m.month|stringformat:'s' %}selected{% endif %}>
+                    {{ m.label }}
                 </option>
                 {% endfor %}
             {% else %}
-                {% for m in available_months %}
-                <option value="{{ m.date_str }}" {% if target_date|date:'Y-m' == m.value %}selected{% endif %}>
-                    Tháng {{ m.month }}/{{ m.year_str }}
+                {% for w in available_weeks %}
+                <option value="{{ w.date_str }}"
+                    {% if start_date == w.start %}selected{% endif %}>
+                    {{ w.label }}
                 </option>
                 {% endfor %}
             {% endif %}
@@ -232,30 +234,26 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
     <!-- 2. Period nav -->
     <a href="#" id="btn-prev" class="nav-btn" title="Kỳ trước"><i class="fas fa-chevron-left"></i></a>
     <a href="#" id="btn-next" class="nav-btn" title="Kỳ sau"><i class="fas fa-chevron-right"></i></a>
-
+    <input type="hidden" name="q" value="{{ search_query }}">
     <div class="sep"></div>
 
-    <!-- 3. Search form -->
-    <form method="GET" class="toolbar-search">
-        <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+    <!-- 3. Search theo tên -->
+    <form method="GET" class="toolbar-search" style="flex: 0 1 260px;">
         <input type="hidden" name="view_type" value="{{ view_type }}">
-        <select name="search_type">
-            <option value="name" {% if search_type == 'name' %}selected{% endif %}>Theo tên</option>
-            <option value="dob" {% if search_type == 'dob' %}selected{% endif %}>Ngày sinh</option>
-        </select>
+        <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
         <div class="search-box">
             <i class="fas fa-search"></i>
-            <input type="text" name="q" value="{{ search_query }}" placeholder="Nhập thông tin...">
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên...">
         </div>
         <button type="submit" class="btn btn-outline">Tìm</button>
         {% if search_query %}
-        <a href="?date={{ start_date|date:'Y-m-d' }}&search_type={{ search_type }}" class="btn btn-outline" title="Xóa lọc">✕</a>
+        <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}" class="btn btn-outline" title="Xóa lọc">✕</a>
         {% endif %}
     </form>
 
     <div class="sep"></div>
 
-    <!-- 4. Action buttons (only show if can_edit) -->
+    <!-- 3. Action buttons -->
     {% if can_edit %}
     <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
         <i class="fas fa-user-plus"></i> Thêm
@@ -264,10 +262,10 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
         <i class="fas fa-file-import"></i> Nhập Excel
     </button>
     {% endif %}
-    <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&search_type={{ search_type }}{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-outline">
+    <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}" class="btn btn-outline">
         <i class="fas fa-chart-column"></i> Thống kê
     </a>
-    <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&search_type={{ search_type }}&export=excel{% if search_query %}&q={{ search_query|urlencode }}{% endif %}" class="btn btn-primary">
+    <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&export=excel" class="btn btn-primary">
         <i class="fas fa-file-excel"></i> Xuất Excel
     </a>
     {% if can_edit %}
@@ -283,8 +281,6 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
         {% csrf_token %}
         <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
         <input type="hidden" name="view_type" value="{{ view_type }}">
-        <input type="hidden" name="search_type" value="{{ search_type }}">
-        <input type="hidden" name="q" value="{{ search_query }}">
 
         <div class="table-container">
             <table class="payroll-table">
@@ -384,14 +380,10 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
                     <tr>
                         <td colspan="100%" class="empty-state">
                             <i class="fas fa-users-slash"></i>
-                            {% if search_query %}
-                            Không tìm thấy nhân viên phù hợp với từ khóa "{{ search_query }}".
-                            {% else %}
                             Chưa có dữ liệu nhân viên. <br>
                             <a href="#" onclick="document.getElementById('add-worker-modal').style.display='block'">
                                 Thêm nhân viên ngay
                             </a>
-                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}
@@ -552,7 +544,12 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
     const periodSelect = document.getElementById('period-select');
 
     viewTypeSelect.addEventListener('change', function () {
-        goToPeriod('{{ target_date|date:"Y-m-d" }}', this.value);
+        // Khi đổi view type, reload để backend tự chọn kỳ hiện tại
+        const params = new URLSearchParams(window.location.search);
+        params.set('view_type', this.value);
+        params.set('date', '{{ start_date|date:"Y-m-d" }}');
+        params.delete('export');
+        window.location.href = '?' + params.toString();
     });
 
     periodSelect.addEventListener('change', function () {

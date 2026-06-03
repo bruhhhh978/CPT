@@ -22,7 +22,8 @@ from django.contrib import messages
 from .forms import CongTrinhForm
 from datetime import timedelta
 from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
-
+import datetime
+import calendar
 # ============ MANAGER DASHBOARD & USER MANAGEMENT ============
 
 @manager_only
@@ -225,30 +226,43 @@ def change_own_password(request):
     return render(request, 'payroll/change_password.html')
 
 # ============ END MANAGER DASHBOARD ============
+def get_week_start(date):
+    """Trả về ngày Thứ 6 bắt đầu tuần chứa date (T6→T5)."""
+    days_since_friday = (date.weekday() - 4) % 7
+    return date - datetime.timedelta(days=days_since_friday)
 
 def get_week_range(date):
-    # Excel file uses week range from Friday to Thursday.
-    days_since_friday = (date.weekday() - 4) % 7
-    friday = date - datetime.timedelta(days=days_since_friday)
+    """Trả về danh sách 7 ngày của tuần chứa date (T6..T5)."""
+    friday = get_week_start(date)
     return [friday + datetime.timedelta(days=i) for i in range(7)]
 
 def get_available_weeks():
+    """Lấy tất cả các tuần có dữ liệu, sắp xếp theo ngày bắt đầu."""
+    from .models import Attendance
     dates = Attendance.objects.values_list('date', flat=True).distinct()
     weeks = set()
     for d in dates:
-        days_since_friday = (d.weekday() - 4) % 7
-        friday = d - datetime.timedelta(days=days_since_friday)
-        weeks.add(friday)
+        weeks.add(get_week_start(d))
     return sorted(weeks)
 
-def get_weeks_in_month(date):
-    first_day = date.replace(day=1)
-    last_day = date.replace(day=calendar.monthrange(date.year, date.month)[1])
-    weeks = {
-        get_week_range(first_day + datetime.timedelta(days=i))[0]
-        for i in range((last_day - first_day).days + 1)
-    }
-    return sorted(weeks)
+def get_available_months():
+    """
+    Lấy tất cả các tháng có dữ liệu.
+    Tháng được xác định bởi ngày Thứ 6 đầu tuần (giống Excel).
+    """
+    from .models import Attendance
+    dates = Attendance.objects.values_list('date', flat=True).distinct()
+    months = set()
+    for d in dates:
+        friday = get_week_start(d)
+        months.add((friday.year, friday.month))
+    return sorted(months)
+
+def get_weeks_in_month(year, month):
+    """Trả về các ngày Thứ 6 bắt đầu tuần thuộc tháng/năm chỉ định."""
+    from .models import Attendance
+    all_weeks = get_available_weeks()
+    return [w for w in all_weeks if w.year == year and w.month == month]
 
 def to_symbol(val):
     if val >= 1.0: return 'x'
@@ -382,6 +396,9 @@ def build_weekly_payroll_data(employees, dates):
 
     return payroll_data
 
+
+
+
 def payroll_sheet(request):
     # Determine if user can edit (must be authenticated AND be manager/user)
     can_edit = False
@@ -408,12 +425,23 @@ def payroll_sheet(request):
         view_type = 'week'
 
     search_query = request.GET.get('q', '').strip()
+    if search_query:
+        employees = Employee.objects.filter(name__icontains=search_query).order_by('name')
+    else:
+        employees = Employee.objects.all().order_by('name')
     search_type = get_search_type(request)
 
     if view_type == 'month':
-        first_day = target_date.replace(day=1)
-        last_day = target_date.replace(day=calendar.monthrange(target_date.year, target_date.month)[1])
-        dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
+        # Lấy tất cả tuần thuộc tháng của target_date (theo mốc T6)
+        week_start = get_week_start(target_date)
+        year, month = week_start.year, week_start.month
+        weeks_this_month = get_weeks_in_month(year, month)
+        if weeks_this_month:
+            first_day = weeks_this_month[0]                              # T6 đầu tiên
+            last_day  = weeks_this_month[-1] + datetime.timedelta(days=6)  # T5 cuối cùng
+            dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
+        else:
+            dates = get_week_range(target_date)  # fallback
     else:
         dates = get_week_range(target_date)
 
@@ -428,24 +456,28 @@ def payroll_sheet(request):
 
     employees = get_filtered_employees(search_query, search_type)
     payroll_data = build_weekly_payroll_data(employees, dates)
+    all_weeks_raw = get_available_weeks()
     available_weeks = [
         {
-            'start': w,
-            'end': w + datetime.timedelta(days=6),
+            'start'   : w,
+            'end'     : w + datetime.timedelta(days=6),
             'date_str': w.strftime('%Y-%m-%d'),
+            'label'   : f"Tuần {i:02d}: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}",
         }
-        for w in get_weeks_in_month(target_date)
+        for i, w in enumerate(all_weeks_raw, start=1)
     ]
-    available_months = [
-        {
-            'year': target_date.year,
-            'year_str': str(target_date.year),
-            'month': month,
-            'date_str': datetime.date(target_date.year, month, 1).strftime('%Y-%m-%d'),
-            'value': f"{target_date.year}-{month:02d}",
-        }
-        for month in range(1, 13)
-    ]
+    available_months = []
+    for (year, month) in get_available_months():
+        weeks_in_m = get_weeks_in_month(year, month)
+        # date_str trỏ về tuần đầu tiên của tháng đó
+        first_week_str = weeks_in_m[0].strftime('%Y-%m-%d') if weeks_in_m else f'{year}-{month:02d}-01'
+        available_months.append({
+            'year'     : year,
+            'month'    : month,
+            'date_str' : first_week_str,
+            'label'    : f"Tháng {month:02d}/{year}",
+            'value'    : f"{year}-{month:02d}",
+        })
 
     date_headers = [
         {
@@ -509,12 +541,10 @@ def payroll_statistics(request):
         can_edit = False
     
     target_date = get_target_date(request)
-    search_query = request.GET.get('q', '').strip()
-    search_type = get_search_type(request)
     dates = get_week_range(target_date)
     start_date, end_date = dates[0], dates[-1]
 
-    employees = get_filtered_employees(search_query, search_type)
+    employees = Employee.objects.all().order_by('name')
     payroll_data = build_weekly_payroll_data(employees, dates)
 
     total_hc = sum((row['total_hc'] for row in payroll_data), Decimal('0.0'))
@@ -559,8 +589,6 @@ def payroll_statistics(request):
         'end_date': end_date,
         'prev_week': start_date - datetime.timedelta(days=7),
         'next_week': start_date + datetime.timedelta(days=7),
-        'search_query': search_query,
-        'search_type': search_type,
         'payroll_data': payroll_data,
         'employee_count': len(payroll_data),
         'total_hc': total_hc,
