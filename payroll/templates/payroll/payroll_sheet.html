@@ -200,6 +200,71 @@
 .table-scrollbar-proxy::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.06); }
 .table-scrollbar-proxy::-webkit-scrollbar-thumb { background: rgba(249, 115, 22, 0.55); border-radius: 999px; }
 body.has-table-scrollbar-proxy { padding-bottom: 30px; }
+
+.payroll-sheet-table-container {
+    --payroll-visible-rows: 12;
+    --payroll-header-row-height: 34px;
+    max-height: calc(var(--payroll-header-row-height) * 2 + var(--payroll-visible-rows) * 42px + 48px);
+    overflow: auto !important;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.96);
+}
+
+.payroll-sheet-table-container::-webkit-scrollbar {
+    display: block !important;
+    width: 10px !important;
+    height: 10px !important;
+}
+
+.payroll-sheet-table-container::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.06) !important;
+}
+
+.payroll-sheet-table-container::-webkit-scrollbar-thumb {
+    background: rgba(249, 115, 22, 0.5) !important;
+    border-radius: 999px !important;
+}
+
+.payroll-sheet-table-container .payroll-table {
+    margin-top: 0;
+}
+
+.payroll-sheet-table-container .payroll-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 70;
+    background: #fff7ed;
+    box-shadow: 0 1px 0 var(--border);
+}
+
+.payroll-sheet-table-container .payroll-table thead tr:nth-child(2) th {
+    top: var(--payroll-header-row-height);
+    z-index: 69;
+}
+
+.payroll-sheet-table-container .payroll-table thead th.stt-col,
+.payroll-sheet-table-container .payroll-table thead th.name-col {
+    z-index: 90;
+}
+
+.payroll-sheet-table-container .payroll-table tbody tr.summary-row td {
+    position: sticky;
+    bottom: 0;
+    z-index: 65;
+    background: var(--surface, #fff8f0) !important;
+    box-shadow: 0 -2px 0 var(--primary), 0 -8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.payroll-sheet-table-container .payroll-table tbody tr.summary-row td.stt-col,
+.payroll-sheet-table-container .payroll-table tbody tr.summary-row td.name-col {
+    z-index: 85;
+}
+
+.payroll-sheet-table-container .payroll-table tbody tr.summary-row:hover td {
+    background: var(--surface, #fff8f0) !important;
+}
+
 </style>
 
 <div class="card">
@@ -282,7 +347,7 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
         <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
         <input type="hidden" name="view_type" value="{{ view_type }}">
 
-        <div class="table-container">
+        <div class="table-container payroll-sheet-table-container">
             <table class="payroll-table">
                 <colgroup>
                     <col class="stt-col">
@@ -572,6 +637,25 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
         goToPeriod(this.value, viewTypeSelect.value);
     });
 
+    (function initPayrollLimitedRows() {
+        const tableContainer = document.querySelector('.payroll-sheet-table-container');
+        const firstHeaderRow = document.querySelector('.payroll-table thead tr:first-child');
+        if (!tableContainer || !firstHeaderRow) return;
+
+        function updateHeaderRowHeight() {
+            tableContainer.style.setProperty('--payroll-header-row-height', firstHeaderRow.offsetHeight + 'px');
+            window.dispatchEvent(new Event('payroll:layoutchange'));
+        }
+
+        window.addEventListener('load', updateHeaderRowHeight);
+        window.addEventListener('resize', updateHeaderRowHeight);
+        updateHeaderRowHeight();
+
+        if ('ResizeObserver' in window) {
+            new ResizeObserver(updateHeaderRowHeight).observe(firstHeaderRow);
+        }
+    })();
+
     // Period navigation
     document.getElementById('btn-prev').addEventListener('click', function (e) {
         e.preventDefault();
@@ -608,6 +692,7 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
             const shouldShow = scrollWidth > clientWidth + 1;
             proxy.classList.toggle('is-visible', shouldShow);
             document.body.classList.toggle('has-table-scrollbar-proxy', shouldShow);
+            window.dispatchEvent(new Event('payroll:layoutchange'));
         }
 
         tableContainer.addEventListener('scroll', function () {
