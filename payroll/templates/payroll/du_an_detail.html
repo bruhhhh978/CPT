@@ -67,7 +67,8 @@
                 <a href="{% url 'payroll:du_an_edit' du_an.pk %}" class="btn btn-primary">
                     <i class="fas fa-edit"></i> Chỉnh sửa
                 </a>
-                <a href="{% url 'payroll:payroll_sheet' %}?date={{ latest_week }}&view_type=week" class="btn btn-secondary">
+                <a href="{% url 'payroll:payroll_sheet' %}?date={{ latest_week }}&view_type=week&du_an_id={{ du_an.id }}" 
+                class="btn btn-secondary">
                     <i class="fas fa-table"></i> Bảng lương
                 </a>
                 <a href="{% url 'payroll:payroll_statistics' %}?date={{ latest_week }}&view_type=week" class="btn btn-secondary">

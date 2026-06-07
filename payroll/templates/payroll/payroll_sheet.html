@@ -306,6 +306,7 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
     <form method="GET" class="toolbar-search" style="flex: 0 1 260px;">
         <input type="hidden" name="view_type" value="{{ view_type }}">
         <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+        <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
         <div class="search-box">
             <i class="fas fa-search"></i>
             <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên...">
@@ -346,7 +347,7 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
         {% csrf_token %}
         <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
         <input type="hidden" name="view_type" value="{{ view_type }}">
-
+        <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
         <div class="table-container payroll-sheet-table-container">
             <table class="payroll-table">
                 <colgroup>
