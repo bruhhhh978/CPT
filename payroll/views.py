@@ -507,9 +507,9 @@ def payroll_sheet(request):
                 except: pass
         summary_daily.append({'hc': day_hc, 'tc': day_tc})
 
-    summary_total_hc  = sum(r['total_hc'] for r in payroll_data).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-    summary_total_tc  = sum(r['total_tc'] for r in payroll_data).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-    summary_total_pay = sum(r['total_pay'] for r in payroll_data)
+    summary_total_hc  = sum((Decimal(r['total_hc']) for r in payroll_data), Decimal(0)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    summary_total_tc  = sum((Decimal(r['total_tc']) for r in payroll_data), Decimal(0)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    summary_total_pay = sum((Decimal(r['total_pay']) for r in payroll_data), Decimal(0))
     context = {
         'target_date': target_date,
         'dates': dates,
