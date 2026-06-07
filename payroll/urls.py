@@ -32,4 +32,9 @@ urlpatterns = [
     path('projects/<int:pk>/edit/', views.du_an_edit, name='du_an_edit'),
     path('projects/<int:pk>/delete/', views.du_an_delete, name='du_an_delete'),
     path('tong-hop-2026/', views.tong_hop_2026, name='tong_hop_2026'),
+
+    # User tracking routes
+    path('manager/user-tracking/', views.user_tracking_dashboard, name='user_tracking_dashboard'),
+    path('manager/user-tracking/<int:user_id>/', views.user_tracking_detail, name='user_tracking_detail'),
+    path('api/online-users/', views.api_online_users, name='api_online_users'),
 ]

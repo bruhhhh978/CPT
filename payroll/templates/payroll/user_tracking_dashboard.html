@@ -1,0 +1,377 @@
+{% extends "payroll/base.html" %}
+{% load static %}
+
+{% block title %}Theo dõi người dùng — CPT{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Layout ── */
+  .tracking-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+  .tracking-full { grid-column: 1 / -1; }
+
+  /* ── Stat cards ── */
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    padding: 1.2rem 1.4rem;
+    text-align: center;
+    backdrop-filter: blur(10px);
+  }
+  .stat-card .num {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+  }
+  .stat-card .lbl {
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.6);
+    margin-top: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .stat-card.green .num { color: #4ade80; }
+  .stat-card.amber .num { color: #fbbf24; }
+  .stat-card.red   .num { color: #f87171; }
+  .stat-card.blue  .num { color: #60a5fa; }
+
+  /* ── Panel ── */
+  .panel {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 0.9rem 1.2rem;
+    background: rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+  }
+  .panel-body { padding: 0; }
+
+  /* ── Online badge ── */
+  .online-dot {
+    width: 8px; height: 8px;
+    background: #4ade80;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+  }
+
+  /* ── Table ── */
+  .track-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    color: rgba(255,255,255,0.85);
+  }
+  .track-table th {
+    padding: 0.6rem 0.9rem;
+    text-align: left;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.45);
+    background: rgba(0,0,0,0.15);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .track-table td {
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    vertical-align: middle;
+  }
+  .track-table tr:last-child td { border-bottom: none; }
+  .track-table tr:hover td { background: rgba(255,255,255,0.04); }
+
+  /* ── Action badges ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-size: 0.72rem;
+    font-weight: 600;
+  }
+  .badge-VIEW   { background: rgba(96,165,250,0.2);  color: #93c5fd; }
+  .badge-CREATE { background: rgba(74,222,128,0.2);  color: #86efac; }
+  .badge-UPDATE { background: rgba(251,191,36,0.2);  color: #fde68a; }
+  .badge-DELETE { background: rgba(248,113,113,0.2); color: #fca5a5; }
+  .badge-EXPORT { background: rgba(167,139,250,0.2); color: #c4b5fd; }
+  .badge-IMPORT { background: rgba(251,146,60,0.2);  color: #fdba74; }
+  .badge-LOGIN  { background: rgba(45,212,191,0.2);  color: #5eead4; }
+  .badge-LOGOUT { background: rgba(156,163,175,0.2); color: #d1d5db; }
+  .badge-FAILED { background: rgba(248,113,113,0.3); color: #f87171; }
+
+  /* ── Refresh button ── */
+  .btn-refresh {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    transition: background 0.2s;
+  }
+  .btn-refresh:hover { background: rgba(255,255,255,0.18); }
+
+  .empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: rgba(255,255,255,0.35);
+    font-size: 0.85rem;
+  }
+
+  .user-link {
+    color: #93c5fd;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .user-link:hover { text-decoration: underline; }
+
+  .counter-badge {
+    background: rgba(74,222,128,0.25);
+    color: #4ade80;
+    border-radius: 99px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .ip-text { font-family: monospace; font-size: 0.78rem; color: rgba(255,255,255,0.5); }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<h2 style="text-align:center;text-transform:uppercase;margin:1.5rem 0;font-weight:900;
+           letter-spacing:0.2em;color:white;text-shadow:0 4px 10px rgba(0,0,0,.5);font-size:2rem;">
+  🔍 Theo dõi người dùng
+</h2>
+{% endblock %}
+
+{% block content %}
+
+<!-- ── Stat cards ── -->
+<div class="stat-row">
+  <div class="stat-card green">
+    <div class="num" id="online-count">{{ online_count }}</div>
+    <div class="lbl"><span class="online-dot"></span>Đang online</div>
+  </div>
+  <div class="stat-card blue">
+    <div class="num">{{ logins_today }}</div>
+    <div class="lbl">Lượt đăng nhập hôm nay</div>
+  </div>
+  <div class="stat-card red">
+    <div class="num">{{ failed_today }}</div>
+    <div class="lbl">Đăng nhập thất bại hôm nay</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="num">{{ now|date:"H:i" }}</div>
+    <div class="lbl">Cập nhật lúc</div>
+  </div>
+</div>
+
+<!-- ── Row 1: Online users + Top users ── -->
+<div class="tracking-grid">
+
+  <!-- Online users -->
+  <div class="panel">
+    <div class="panel-header">
+      <h3><span class="online-dot"></span>Đang online ngay bây giờ</h3>
+      <button class="btn-refresh" onclick="refreshOnline()">↻ Làm mới</button>
+    </div>
+    <div class="panel-body">
+      <table class="track-table" id="online-table">
+        <thead>
+          <tr>
+            <th>Người dùng</th>
+            <th>Trang hiện tại</th>
+            <th>Online</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody id="online-tbody">
+          {% for s in online_users %}
+          <tr>
+            <td>
+              <a href="{% url 'payroll:user_tracking_detail' s.user.pk %}" class="user-link">
+                {{ s.user.get_full_name|default:s.user.username }}
+              </a>
+            </td>
+            <td>{{ s.current_page|default:"—" }}</td>
+            <td><span style="color:#4ade80;font-size:.78rem">{{ s.duration }}</span></td>
+            <td><span class="ip-text">{{ s.ip_address|default:"—" }}</span></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="empty-state">Không có ai đang online</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Top users hôm nay -->
+  <div class="panel">
+    <div class="panel-header">
+      <h3>🏆 Top hoạt động hôm nay</h3>
+    </div>
+    <div class="panel-body">
+      <table class="track-table">
+        <thead>
+          <tr><th>#</th><th>Người dùng</th><th>Số thao tác</th></tr>
+        </thead>
+        <tbody>
+          {% for u in top_users %}
+          <tr>
+            <td style="color:rgba(255,255,255,.4)">{{ forloop.counter }}</td>
+            <td>{{ u.user__username|default:"—" }}</td>
+            <td><span class="counter-badge">{{ u.total }}</span></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="empty-state">Chưa có hoạt động</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Activity log gần nhất -->
+  <div class="panel tracking-full">
+    <div class="panel-header">
+      <h3>📋 Nhật ký hoạt động gần nhất</h3>
+      <a href="?tab=activity" style="font-size:.78rem;color:rgba(255,255,255,.5)">Xem tất cả</a>
+    </div>
+    <div class="panel-body">
+      <table class="track-table">
+        <thead>
+          <tr>
+            <th>Thời gian</th>
+            <th>Người dùng</th>
+            <th>Hành động</th>
+            <th>Đối tượng</th>
+            <th>Mô tả</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in recent_activities %}
+          <tr>
+            <td style="white-space:nowrap;color:rgba(255,255,255,.5)">
+              {{ log.created_at|date:"d/m H:i:s" }}
+            </td>
+            <td>
+              {% if log.user %}
+              <a href="{% url 'payroll:user_tracking_detail' log.user.pk %}" class="user-link">
+                {{ log.user.username }}
+              </a>
+              {% else %}—{% endif %}
+            </td>
+            <td><span class="badge badge-{{ log.action_type }}">{{ log.get_action_type_display }}</span></td>
+            <td style="color:rgba(255,255,255,.6)">{{ log.model_name|default:"—" }}</td>
+            <td>{{ log.description|default:"—"|truncatechars:60 }}</td>
+            <td><span class="ip-text">{{ log.ip_address|default:"—" }}</span></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="empty-state">Chưa có nhật ký</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Login log -->
+  <div class="panel tracking-full">
+    <div class="panel-header">
+      <h3>🔐 Lịch sử đăng nhập / đăng xuất</h3>
+    </div>
+    <div class="panel-body">
+      <table class="track-table">
+        <thead>
+          <tr>
+            <th>Thời gian</th>
+            <th>Người dùng</th>
+            <th>Trạng thái</th>
+            <th>Trình duyệt</th>
+            <th>IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in recent_logins %}
+          <tr>
+            <td style="white-space:nowrap;color:rgba(255,255,255,.5)">
+              {{ log.created_at|date:"d/m/Y H:i:s" }}
+            </td>
+            <td>
+              {% if log.user %}
+              <a href="{% url 'payroll:user_tracking_detail' log.user.pk %}" class="user-link">
+                {{ log.user.username }}
+              </a>
+              {% else %}
+                <span style="color:#f87171">{{ log.attempted_username|default:"?" }}</span>
+              {% endif %}
+            </td>
+            <td><span class="badge badge-{{ log.action }}">{{ log.get_action_display }}</span></td>
+            <td style="color:rgba(255,255,255,.6)">{{ log.browser_short }}</td>
+            <td><span class="ip-text">{{ log.ip_address|default:"—" }}</span></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="empty-state">Chưa có dữ liệu</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- end tracking-grid -->
+
+<script>
+// Auto-refresh online users mỗi 30 giây
+function refreshOnline() {
+  fetch("{% url 'payroll:api_online_users' %}")
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('online-count').textContent = data.count;
+      const tbody = document.getElementById('online-tbody');
+      if (data.users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Không có ai đang online</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.users.map(u => `
+        <tr>
+          <td><span style="color:#93c5fd;font-weight:500">${u.full_name}</span></td>
+          <td>${u.current_page || '—'}</td>
+          <td><span style="color:#4ade80;font-size:.78rem">${u.duration}</span></td>
+          <td><span class="ip-text">${u.ip || '—'}</span></td>
+        </tr>
+      `).join('');
+    })
+    .catch(console.error);
+}
+
+setInterval(refreshOnline, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,234 @@
+{% extends "payroll/base.html" %}
+{% load static %}
+
+{% block title %}Lịch sử — {{ target_user.username }} — CPT{% endblock %}
+
+{% block extra_head %}
+<style>
+  .back-link {
+    color: rgba(255,255,255,.5);
+    text-decoration: none;
+    font-size: .85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 1rem;
+  }
+  .back-link:hover { color: #93c5fd; }
+
+  .user-header {
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 14px;
+    padding: 1.4rem 1.8rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .avatar {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg,#6366f1,#8b5cf6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .user-meta h2 { margin: 0 0 .3rem; font-size: 1.2rem; color: #fff; }
+  .user-meta p  { margin: 0; font-size: .82rem; color: rgba(255,255,255,.5); }
+
+  .breakdown-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .7rem;
+    margin-bottom: 1.5rem;
+  }
+  .breakdown-pill {
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 99px;
+    padding: .35rem 1rem;
+    font-size: .8rem;
+    color: rgba(255,255,255,.8);
+  }
+  .breakdown-pill span { font-weight: 700; margin-left: .3rem; }
+
+  .tabs {
+    display: flex;
+    gap: .5rem;
+    margin-bottom: 1rem;
+  }
+  .tab-btn {
+    padding: .5rem 1.2rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,.15);
+    background: rgba(255,255,255,.06);
+    color: rgba(255,255,255,.6);
+    cursor: pointer;
+    font-size: .85rem;
+    transition: all .2s;
+  }
+  .tab-btn.active, .tab-btn:hover {
+    background: rgba(255,255,255,.15);
+    color: #fff;
+    border-color: rgba(255,255,255,.3);
+  }
+
+  .panel {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .track-table {
+    width: 100%; border-collapse: collapse;
+    font-size: .82rem; color: rgba(255,255,255,.85);
+  }
+  .track-table th {
+    padding: .6rem .9rem; text-align: left;
+    font-size: .72rem; text-transform: uppercase;
+    letter-spacing: .06em; color: rgba(255,255,255,.4);
+    background: rgba(0,0,0,.15);
+    border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .track-table td {
+    padding: .6rem .9rem;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+    vertical-align: middle;
+  }
+  .track-table tr:last-child td { border-bottom: none; }
+  .track-table tr:hover td { background: rgba(255,255,255,.04); }
+
+  .badge {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 99px; font-size: .72rem; font-weight: 600;
+  }
+  .badge-VIEW   { background:rgba(96,165,250,.2);  color:#93c5fd; }
+  .badge-CREATE { background:rgba(74,222,128,.2);  color:#86efac; }
+  .badge-UPDATE { background:rgba(251,191,36,.2);  color:#fde68a; }
+  .badge-DELETE { background:rgba(248,113,113,.2); color:#fca5a5; }
+  .badge-EXPORT { background:rgba(167,139,250,.2); color:#c4b5fd; }
+  .badge-IMPORT { background:rgba(251,146,60,.2);  color:#fdba74; }
+  .badge-LOGIN  { background:rgba(45,212,191,.2);  color:#5eead4; }
+  .badge-LOGOUT { background:rgba(156,163,175,.2); color:#d1d5db; }
+  .badge-FAILED { background:rgba(248,113,113,.3); color:#f87171; }
+  .ip-text { font-family:monospace; font-size:.78rem; color:rgba(255,255,255,.5); }
+
+  #tab-login { display: none; }
+</style>
+{% endblock %}
+
+{% block page_header %}{% endblock %}
+
+{% block content %}
+<a class="back-link" href="{% url 'payroll:user_tracking_dashboard' %}">
+  ← Quay lại Dashboard
+</a>
+
+<!-- User header -->
+<div class="user-header">
+  <div class="avatar">{{ target_user.username|first|upper }}</div>
+  <div class="user-meta">
+    <h2>{{ target_user.get_full_name|default:target_user.username }}</h2>
+    <p>
+      @{{ target_user.username }}
+      &nbsp;·&nbsp; {{ target_user.email|default:"Chưa có email" }}
+      &nbsp;·&nbsp;
+      {% if target_user.profile.role == 'manager' %}
+        <span style="color:#fbbf24">👑 Quản lý</span>
+      {% elif target_user.profile.role == 'user' %}
+        <span style="color:#93c5fd">👤 Nhân viên</span>
+      {% else %}
+        <span style="color:#6ee7b7">👁️ Xem</span>
+      {% endif %}
+      &nbsp;·&nbsp; Tham gia: {{ target_user.date_joined|date:"d/m/Y" }}
+    </p>
+  </div>
+</div>
+
+<!-- Breakdown -->
+<div class="breakdown-row">
+  <div class="breakdown-pill">Tổng thao tác <span>{{ total_actions }}</span></div>
+  {% for b in action_breakdown %}
+  <div class="breakdown-pill">{{ b.action_type }} <span>{{ b.total }}</span></div>
+  {% endfor %}
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('activity', this)">📋 Nhật ký hoạt động</button>
+  <button class="tab-btn" onclick="showTab('login', this)">🔐 Lịch sử đăng nhập</button>
+</div>
+
+<!-- Activity tab -->
+<div id="tab-activity" class="panel">
+  <table class="track-table">
+    <thead>
+      <tr>
+        <th>Thời gian</th>
+        <th>Hành động</th>
+        <th>Đối tượng</th>
+        <th>Mô tả</th>
+        <th>URL</th>
+        <th>IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in activities %}
+      <tr>
+        <td style="white-space:nowrap;color:rgba(255,255,255,.5)">
+          {{ log.created_at|date:"d/m/Y H:i:s" }}
+        </td>
+        <td><span class="badge badge-{{ log.action_type }}">{{ log.get_action_type_display }}</span></td>
+        <td style="color:rgba(255,255,255,.6)">
+          {{ log.model_name|default:"" }}
+          {% if log.object_repr %}<br><small style="color:rgba(255,255,255,.4)">{{ log.object_repr|truncatechars:40 }}</small>{% endif %}
+        </td>
+        <td>{{ log.description|default:"—"|truncatechars:80 }}</td>
+        <td><span style="font-family:monospace;font-size:.75rem;color:rgba(255,255,255,.4)">{{ log.path|default:"—" }}</span></td>
+        <td><span class="ip-text">{{ log.ip_address|default:"—" }}</span></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" style="text-align:center;padding:2rem;color:rgba(255,255,255,.3)">Chưa có nhật ký</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Login tab -->
+<div id="tab-login" class="panel">
+  <table class="track-table">
+    <thead>
+      <tr>
+        <th>Thời gian</th>
+        <th>Trạng thái</th>
+        <th>Trình duyệt</th>
+        <th>IP</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logins %}
+      <tr>
+        <td style="white-space:nowrap;color:rgba(255,255,255,.5)">
+          {{ log.created_at|date:"d/m/Y H:i:s" }}
+        </td>
+        <td><span class="badge badge-{{ log.action }}">{{ log.get_action_display }}</span></td>
+        <td style="color:rgba(255,255,255,.6)">{{ log.browser_short }}</td>
+        <td><span class="ip-text">{{ log.ip_address|default:"—" }}</span></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" style="text-align:center;padding:2rem;color:rgba(255,255,255,.3)">Chưa có dữ liệu</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+function showTab(name, btn) {
+  document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).style.display = 'block';
+  btn.classList.add('active');
+}
+</script>
+{% endblock %}

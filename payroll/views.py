@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Count
 from .models import Employee, Attendance, Adjustment, AdjustmentLog, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang
 from decimal import Decimal
 import pandas as pd
@@ -16,7 +16,7 @@ from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User
-from login.models import UserProfile
+from login.models import UserProfile,  UserLoginLog, UserActivityLog, ActiveSession
 from .decorators import manager_only, user_and_manager, allow_viewer
 from django.contrib import messages
 from .forms import CongTrinhForm
@@ -25,6 +25,7 @@ from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
 import datetime
 import calendar
 from decimal import Decimal, ROUND_HALF_UP
+from django.contrib.auth.decorators import login_required
 # ============ MANAGER DASHBOARD & USER MANAGEMENT ============
 
 @manager_only
@@ -1269,3 +1270,113 @@ def tong_hop_2026(request):
         'so_nv'      : len(employee_rows),
     }
     return render(request, 'payroll/tong_hop_2026.html', context)
+
+# ── 1. Dashboard tổng quan theo dõi user ─────────────────
+@login_required
+@manager_only
+def user_tracking_dashboard(request):
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+ 
+    # ---- Thống kê nhanh ----
+    online_cutoff = now - timezone.timedelta(minutes=5)
+    online_users  = ActiveSession.objects.filter(
+        last_activity__gte=online_cutoff
+    ).select_related('user').order_by('-last_activity')
+ 
+    logins_today = UserLoginLog.objects.filter(
+        action=UserLoginLog.ACTION_LOGIN,
+        created_at__gte=today_start
+    ).count()
+ 
+    failed_today = UserLoginLog.objects.filter(
+        action=UserLoginLog.ACTION_FAILED,
+        created_at__gte=today_start
+    ).count()
+ 
+    # ---- Activity log gần nhất (50 dòng) ----
+    recent_activities = UserActivityLog.objects.select_related('user') \
+                            .order_by('-created_at')[:50]
+ 
+    # ---- Login log gần nhất (50 dòng) ----
+    recent_logins = UserLoginLog.objects.select_related('user') \
+                        .order_by('-created_at')[:50]
+ 
+    # ---- Top user hoạt động hôm nay ----
+    top_users = UserActivityLog.objects.filter(
+        created_at__gte=today_start
+    ).values('user__username').annotate(
+        total=Count('id')
+    ).order_by('-total')[:10]
+ 
+    # ---- Thống kê theo loại hành động hôm nay ----
+    action_stats = UserActivityLog.objects.filter(
+        created_at__gte=today_start
+    ).values('action_type').annotate(total=Count('id')).order_by('-total')
+ 
+    context = {
+        'online_users':      online_users,
+        'online_count':      online_users.count(),
+        'logins_today':      logins_today,
+        'failed_today':      failed_today,
+        'recent_activities': recent_activities,
+        'recent_logins':     recent_logins,
+        'top_users':         top_users,
+        'action_stats':      action_stats,
+        'now':               now,
+    }
+    return render(request, 'payroll/user_tracking_dashboard.html', context)
+ 
+ 
+# ── 2. Lịch sử của 1 user cụ thể ─────────────────────────
+@login_required
+@manager_only
+def user_tracking_detail(request, user_id):
+    target_user = get_object_or_404(User, pk=user_id)
+ 
+    activities = UserActivityLog.objects.filter(
+        user=target_user
+    ).order_by('-created_at')[:200]
+ 
+    logins = UserLoginLog.objects.filter(
+        user=target_user
+    ).order_by('-created_at')[:100]
+ 
+    # Thống kê tổng hợp
+    total_actions = activities.count()
+    action_breakdown = UserActivityLog.objects.filter(
+        user=target_user
+    ).values('action_type').annotate(total=Count('id')).order_by('-total')
+ 
+    context = {
+        'target_user':       target_user,
+        'activities':        activities,
+        'logins':            logins,
+        'total_actions':     total_actions,
+        'action_breakdown':  action_breakdown,
+    }
+    return render(request, 'payroll/user_tracking_detail.html', context)
+ 
+ 
+# ── 3. API endpoint — refresh danh sách online (AJAX) ────
+@login_required
+@manager_only
+def api_online_users(request):
+    cutoff = timezone.now() - timezone.timedelta(minutes=5)
+    sessions = ActiveSession.objects.filter(
+        last_activity__gte=cutoff
+    ).select_related('user')
+ 
+    data = []
+    for s in sessions:
+        data.append({
+            'username':      s.user.username,
+            'full_name':     s.user.get_full_name() or s.user.username,
+            'current_page':  s.current_page,
+            'last_activity': s.last_activity.strftime('%H:%M:%S'),
+            'ip':            s.ip_address or '—',
+            'duration':      s.duration,
+        })
+ 
+    return JsonResponse({'users': data, 'count': len(data)})
+ 
