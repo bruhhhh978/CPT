@@ -284,9 +284,14 @@ def from_symbol(val):
 
 def get_target_date(request):
     date_str = request.GET.get('date')
-    if date_str:
+
+    if not date_str or date_str == "None":
+        return timezone.now().date()
+
+    try:
         return datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-    return timezone.now().date()
+    except ValueError:
+        return timezone.now().date()
 
 def get_weekday_label(date):
     lookup = {
@@ -508,9 +513,10 @@ def payroll_sheet(request):
                 except: pass
         summary_daily.append({'hc': day_hc, 'tc': day_tc})
 
-    summary_total_hc  = sum(r['total_hc'] for r in payroll_data).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-    summary_total_tc  = sum(r['total_tc'] for r in payroll_data).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-    summary_total_pay = sum(r['total_pay'] for r in payroll_data)
+    summary_total_hc  = sum((Decimal(r['total_hc']) for r in payroll_data), Decimal(0)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    summary_total_tc  = sum((Decimal(r['total_tc']) for r in payroll_data), Decimal(0)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    summary_total_pay = sum((Decimal(r['total_pay']) for r in payroll_data), Decimal(0))
+    du_an_id = request.GET.get('du_an_id', '')
     context = {
         'target_date': target_date,
         'dates': dates,
@@ -532,6 +538,7 @@ def payroll_sheet(request):
         'summary_total_hc' : summary_total_hc,
         'summary_total_tc' : summary_total_tc,
         'summary_total_pay': summary_total_pay,
+        'du_an_id': du_an_id,
     }
     return render(request, 'payroll/payroll_sheet.html', context)
 
@@ -867,7 +874,6 @@ def delete_all_data(request):
     return redirect('payroll:payroll_sheet')
 
 def save_attendance(request):
-    # Check authorization - only users and managers can save
     if not request.user.is_authenticated:
         messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
         return redirect('login:login')
@@ -880,8 +886,19 @@ def save_attendance(request):
     except:
         messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
         return redirect('login:login')
+
     if request.method == 'POST':
         current_date_str = request.POST.get('current_date')
+        
+        # Lấy cong_trinh_obj MỘT LẦN duy nhất ở đây
+        du_an_id = request.POST.get('du_an_id')
+        cong_trinh_obj = None
+        if du_an_id:
+            try:
+                cong_trinh_obj = CongTrinh.objects.get(id=du_an_id)
+            except CongTrinh.DoesNotExist:
+                pass
+
         try:
             target_date = datetime.datetime.strptime(current_date_str, '%Y-%m-%d').date()
         except Exception:
@@ -911,12 +928,11 @@ def save_attendance(request):
                     att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
                     att.regular_workday = hc_val
                     att.overtime_workday = tc_val
-                    du_an_id = request.POST.get('du_an_id')
-                    if du_an_id:
-                        try:
-                            att.cong_trinh = CongTrinh.objects.get(id=du_an_id)
-                        except CongTrinh.DoesNotExist:
-                            pass
+                    # Dùng cong_trinh_obj đã lấy sẵn, không query lại
+                    if cong_trinh_obj:
+                        att.cong_trinh = cong_trinh_obj
+                    else:
+                        att.cong_trinh = None  # ← reset nếu không có du_an_id
                     att.save()
 
             adj_name = f'adj_{emp.id}_{start_date.strftime("%Y-%m-%d")}_{end_date.strftime("%Y-%m-%d")}'
@@ -940,6 +956,9 @@ def save_attendance(request):
         redirect_url = reverse('payroll:payroll_sheet') + f"?date={current_date_str}&view_type={view_type}"
         if search_query:
             redirect_url += f"&q={search_query}"
+        # Giữ lại du_an_id khi redirect để không mất context
+        if du_an_id:
+            redirect_url += f"&du_an_id={du_an_id}"
         return redirect(redirect_url)
 
     return redirect('payroll:payroll_sheet')
@@ -1106,6 +1125,7 @@ def du_an_list(request):
         'time_filter': time_filter,
         'status_filter': status_filter,
         'status_choices': CongTrinh.TRANG_THAI_CHOICES,
+        'can_edit': True,
     }
     return render(request, 'payroll/du_an_list.html', context)
 
@@ -1127,11 +1147,18 @@ def du_an_detail(request, pk):
     du_an = get_object_or_404(CongTrinh, pk=pk)
     
     from .models import Attendance
-    cham_cong_qs = Attendance.objects.filter(cong_trinh=du_an)
+    
+    cham_cong_qs = Attendance.objects.none() 
+    
+    if du_an.ngay_bat_dau:
+        qs_filter = {'date__gte': du_an.ngay_bat_dau}
+        if du_an.thoi_han_ket_thuc:
+            qs_filter['date__lte'] = du_an.thoi_han_ket_thuc
+        cham_cong_qs = Attendance.objects.filter(**qs_filter)
+    
     cham_cong_count = cham_cong_qs.count()
     nhan_vien_count = cham_cong_qs.values('employee').distinct().count()
     
-    # Thêm phần này
     all_weeks = get_available_weeks()
     latest_week = all_weeks[-1].strftime('%Y-%m-%d') if all_weeks else None
     
@@ -1139,8 +1166,9 @@ def du_an_detail(request, pk):
         'du_an': du_an,
         'cham_cong_count': cham_cong_count,
         'nhan_vien_count': nhan_vien_count,
-        'latest_week': latest_week,  # thêm dòng này
+        'latest_week': latest_week,
     })
+
 @manager_only
 def du_an_edit(request, pk):
     """Sửa thông tin công trình (Chỉ quản lý)"""
