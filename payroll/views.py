@@ -283,9 +283,14 @@ def from_symbol(val):
 
 def get_target_date(request):
     date_str = request.GET.get('date')
-    if date_str:
+
+    if not date_str or date_str == "None":
+        return timezone.now().date()
+
+    try:
         return datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-    return timezone.now().date()
+    except ValueError:
+        return timezone.now().date()
 
 def get_weekday_label(date):
     lookup = {
@@ -1105,6 +1110,7 @@ def du_an_list(request):
         'time_filter': time_filter,
         'status_filter': status_filter,
         'status_choices': CongTrinh.TRANG_THAI_CHOICES,
+        'can_edit': True,
     }
     return render(request, 'payroll/du_an_list.html', context)
 
@@ -1126,11 +1132,10 @@ def du_an_detail(request, pk):
     du_an = get_object_or_404(CongTrinh, pk=pk)
     
     from .models import Attendance
-    cham_cong_qs = Attendance.objects.filter(cong_trinh=du_an)
+    cham_cong_qs = Attendance.objects.all()
     cham_cong_count = cham_cong_qs.count()
     nhan_vien_count = cham_cong_qs.values('employee').distinct().count()
     
-    # Thêm phần này
     all_weeks = get_available_weeks()
     latest_week = all_weeks[-1].strftime('%Y-%m-%d') if all_weeks else None
     
@@ -1138,7 +1143,7 @@ def du_an_detail(request, pk):
         'du_an': du_an,
         'cham_cong_count': cham_cong_count,
         'nhan_vien_count': nhan_vien_count,
-        'latest_week': latest_week,  # thêm dòng này
+        'latest_week': latest_week,
     })
 @manager_only
 def du_an_edit(request, pk):
