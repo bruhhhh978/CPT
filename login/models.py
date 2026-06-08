@@ -167,3 +167,25 @@ class ActiveSession(models.Model):
         hours = minutes // 60
         mins  = minutes % 60
         return f"{hours}h{mins:02d}p"
+    
+def log_activity(request, action_type, model_name='', object_id='',
+                 object_repr='', description=''):
+    if not request.user.is_authenticated:
+        return
+
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0].strip()
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+
+    UserActivityLog.objects.create(
+        user        = request.user,
+        action_type = action_type,
+        model_name  = model_name,
+        object_id   = str(object_id),
+        object_repr = object_repr[:200],
+        path        = request.path,
+        description = description,
+        ip_address  = ip,
+    )

@@ -16,7 +16,7 @@ from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User
-from login.models import UserProfile,  UserLoginLog, UserActivityLog, ActiveSession
+from login.models import UserProfile,  UserLoginLog, UserActivityLog, ActiveSession, log_activity
 from .decorators import manager_only, user_and_manager, allow_viewer
 from django.contrib import messages
 from .forms import CongTrinhForm
@@ -102,6 +102,7 @@ def create_user(request):
                     defaults={'role': role}
                 )
             messages.success(request, f'Tạo tài khoản "{username}" với cấp "{role}" thành công.')
+            log_activity(request, 'CREATE', 'TaiKhoan', object_repr=username, description=f'Tạo tài khoản: {username} (cấp {role})')
         except Exception as e:
             messages.error(request, f'Lỗi khi tạo tài khoản: {str(e)}')
         
@@ -137,6 +138,7 @@ def edit_user(request, user_id):
                     user.profile.save()
             
             messages.success(request, f'Cập nhật thông tin cho "{user.username}" thành công.')
+            log_activity(request, 'UPDATE', 'TaiKhoan', object_id=str(user_id), object_repr=user.username, description=f'Cập nhật tài khoản: {user.username}')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
         except Exception as e:
@@ -157,6 +159,7 @@ def toggle_user_status(request, user_id):
                 user.save()
                 status_msg = "Mở khóa" if user.is_active else "Khóa"
                 messages.success(request, f'{status_msg} tài khoản "{user.username}" thành công.')
+                log_activity(request, 'UPDATE', 'TaiKhoan', object_repr=user.username, description=f'{status_msg} tài khoản: {user.username}')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
     return redirect('payroll:manager_dashboard')
@@ -175,6 +178,7 @@ def reset_user_password(request, user_id):
                 user.set_password(new_password)
                 user.save()
                 messages.success(request, f'Đã đặt lại mật khẩu cho tài khoản "{user.username}".')
+                log_activity(request, 'UPDATE', 'TaiKhoan', object_repr=user.username, description=f'Đặt lại mật khẩu: {user.username}')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
         except Exception as e:
@@ -195,6 +199,7 @@ def delete_user(request, user_id):
             
             username = user.username
             user.delete()
+            log_activity(request, 'DELETE', 'TaiKhoan', object_repr=username, description=f'Xóa tài khoản: {username}')
             messages.success(request, f'Xóa tài khoản "{username}" thành công.')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
@@ -462,6 +467,8 @@ def payroll_sheet(request):
         if not request.user.is_authenticated:
             messages.error(request, 'Vui lòng đăng nhập để xuất Excel.')
             return redirect('login:login')
+        log_activity(request, 'EXPORT', 'BaoCao',
+                 description=f'Xuất Excel bảng lương {start_date.strftime("%d/%m")} - {end_date.strftime("%d/%m/%Y")}')
         return export_payroll_excel(dates, start_date, end_date, view_type)
 
     payroll_data = build_weekly_payroll_data(employees, dates)
@@ -694,6 +701,7 @@ def add_employee(request):
             position=pos,
             daily_wage=wage
         )
+        log_activity(request, 'CREATE', 'NhanVien', object_repr=name, description=f'Thêm nhân viên: {name}')
         messages.success(request, f'Đã thêm nhân viên "{name}" thành công.')
     return redirect('payroll:payroll_sheet')
 
@@ -719,6 +727,7 @@ def edit_employee(request, pk):
         emp.position = request.POST.get('position')
         emp.daily_wage = request.POST.get('daily_wage')
         emp.save()
+        log_activity(request, 'UPDATE', 'NhanVien', object_id=str(pk), object_repr=emp.name, description=f'Sửa nhân viên: {emp.name}')
         messages.success(request, f'Đã cập nhật nhân viên "{emp.name}" thành công.')
     return redirect('payroll:payroll_sheet')
 
@@ -740,6 +749,7 @@ def delete_employee(request, pk):
     emp = get_object_or_404(Employee, pk=pk)
     emp_name = emp.name
     emp.delete()
+    log_activity(request, 'DELETE', 'NhanVien', object_repr=emp_name, description=f'Xóa nhân viên: {emp_name}')
     messages.success(request, f'Đã xóa nhân viên "{emp_name}" thành công.')
     return redirect('payroll:payroll_sheet')
 
@@ -852,6 +862,8 @@ def import_excel(request):
 
     # <-- sửa dòng redirect
     redirect_date = first_target_date.strftime('%Y-%m-%d') if first_target_date else request.POST.get('current_date', '')
+    log_activity(request, 'IMPORT', 'ChamCong',
+                 description=f'Import file Excel chấm công')
     return redirect(reverse('payroll:payroll_sheet') + f"?date={redirect_date}")
 
 def delete_all_data(request):
@@ -952,6 +964,7 @@ def save_attendance(request):
                 adjustment.save()
 
         messages.success(request, 'Đã lưu dữ liệu chấm công và các khoản tăng/giảm thành công.')
+        log_activity(request, 'UPDATE', 'ChamCong', description=f'Lưu chấm công ngày {current_date_str}')
 
         redirect_url = reverse('payroll:payroll_sheet') + f"?date={current_date_str}&view_type={view_type}"
         if search_query:
