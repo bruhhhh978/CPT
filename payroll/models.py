@@ -9,6 +9,7 @@ class Employee(models.Model):
         ('Cai', 'Cai (Cai quản)'),
         ('Tho', 'Thợ'),
         ('Phu', 'Phụ'),
+        ('ĐN', 'Đội ngũ khác'),
     ]
     
     name = models.CharField(max_length=100, verbose_name="Họ tên")
@@ -31,7 +32,7 @@ class Attendance(models.Model):
     overtime_workday = models.DecimalField(max_digits=3, decimal_places=1, default=0.0, verbose_name="Công TC")
     cong_trinh = models.ForeignKey('CongTrinh',on_delete=models.SET_NULL,null=True,blank=True,verbose_name="Công trình")
     class Meta:
-        unique_together = ('employee', 'date')
+        unique_together = ('employee', 'date', 'cong_trinh')
         verbose_name = "Chấm công"
         verbose_name_plural = "Chấm công"
 

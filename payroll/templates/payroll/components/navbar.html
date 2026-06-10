@@ -1,0 +1,19 @@
+{# components/navbar.html #}
+<header>
+    <div class="logo">
+        <h1>Công Ty TNHH Xây Dựng CPT</h1>
+    </div>
+    <nav class="nav-links">
+        <a href="{% url 'payroll:du_an_list' %}">Dự án</a>
+        {% if user.is_authenticated %}
+            {% if user.profile.role == 'manager' %}
+            <a href="{% url 'payroll:manager_dashboard' %}" style="color:#f093fb;font-weight:600;">
+                <i class="fas fa-cog"></i> Quản lý
+            </a>
+            {% endif %}
+            {% include "payroll/components/user_menu.html" %}
+        {% else %}
+            <a href="{% url 'login:login' %}">Đăng nhập</a>
+        {% endif %}
+    </nav>
+</header>

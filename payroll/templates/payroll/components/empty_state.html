@@ -1,0 +1,16 @@
+{% if as_li %}
+<li class="empty-state">
+{% else %}
+<div class="empty-state">
+{% endif %}
+
+    <i class="fas {{ empty_icon|default:'fa-inbox' }}"></i>
+    <h3>{{ empty_title|default:"Không có dữ liệu" }}</h3>
+    {% if empty_message %}<p>{{ empty_message }}</p>{% endif %}
+    {% if empty_action %}{{ empty_action }}{% endif %}
+
+{% if as_li %}
+</li>
+{% else %}
+</div>
+{% endif %}

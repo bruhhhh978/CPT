@@ -1,0 +1,28 @@
+{# partials/modal_log.html - Modal lịch sử tăng/giảm #}
+<div id="log-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Lịch sử Tăng/Giảm</h2>
+            <button onclick="closeLogModal()" class="btn btn-close">&times;</button>
+        </div>
+        <div id="log-content">Đang tải...</div>
+    </div>
+</div>
+<script>
+function openLogModal(employeeId) {
+    document.getElementById('log-modal').style.display = 'block';
+    fetch(`/api/log-adjustment/${employeeId}/`)
+        .then(res => res.json())
+        .then(data => {
+            let html = "<table style='width:100%'><tr><th>Ngày</th><th>Tăng</th><th>Giảm</th></tr>";
+            data.logs.forEach(item => {
+                html += `<tr><td>${item.ngay}</td><td style="color:green">+${item.tang}</td><td style="color:red">-${item.giam}</td></tr>`;
+            });
+            html += "</table>";
+            document.getElementById('log-content').innerHTML = html;
+        });
+}
+function closeLogModal() {
+    document.getElementById('log-modal').style.display = 'none';
+}
+</script>

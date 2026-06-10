@@ -1,0 +1,15 @@
+
+<form method="GET" class="toolbar-search" style="flex:0 1 260px;">
+    <input type="hidden" name="view_type" value="{{ view_type }}">
+    <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
+    {% if du_an_id %}<input type="hidden" name="du_an_id" value="{{ du_an_id }}">{% endif %}
+    <div class="search-box">
+        <i class="fas fa-search"></i>
+        <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên...">
+    </div>
+    <button type="submit" class="btn btn-outline">Tìm</button>
+    {% if search_query %}
+    <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
+       class="btn btn-outline" title="Xóa lọc">✕</a>
+    {% endif %}
+</form>

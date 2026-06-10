@@ -1,0 +1,59 @@
+{# partials/payroll_realtime_calc.html - JS tính lương real-time khi nhập công #}
+<script>
+(function () {
+    function formatVND(amount) {
+        return Math.round(amount).toLocaleString('vi-VN') + ' đ';
+    }
+    function parseAtt(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return 0;
+        if (raw.toLowerCase() === 'x') return 1;
+        if (raw === '/' || raw === '\\') return 0.5;
+        const n = parseFloat(raw.replace(/,/g, '.'));
+        return Number.isNaN(n) ? 0 : n;
+    }
+    function recalcRow(row) {
+        const wage = parseFloat(row.dataset.wage.replace(/,/g, '').replace(/\./g, '')) || 0;
+        let totalHc = 0, totalTc = 0;
+        row.querySelectorAll('.att-hc').forEach(i => { totalHc += parseAtt(i.value); });
+        row.querySelectorAll('.att-tc').forEach(i => { totalTc += parseAtt(i.value); });
+        const adjInput = row.querySelector('.adj-input');
+        const adj = parseFloat((adjInput ? adjInput.value : '').replace(/,/g, '.')) || 0;
+        const totalPay = (totalHc * wage) + (totalTc * (wage / 8)) + adj;
+        const cellHc  = row.querySelector('.cell-total-hc');
+        const cellTc  = row.querySelector('.cell-total-tc');
+        const cellPay = row.querySelector('.cell-total-pay');
+        if (cellHc)  cellHc.textContent  = Number.isInteger(totalHc) ? totalHc : totalHc.toFixed(1);
+        if (cellTc)  cellTc.textContent  = Number.isInteger(totalTc) ? totalTc : totalTc.toFixed(1);
+        if (cellPay) {
+            cellPay.textContent  = formatVND(totalPay);
+            cellPay.style.color      = totalPay > 0 ? 'var(--primary)' : '';
+            cellPay.style.fontWeight = totalPay > 0 ? '700' : '';
+        }
+    }
+    document.querySelectorAll('.payroll-row').forEach(row => {
+        row.querySelectorAll('.att-hc,.att-tc').forEach(input => {
+            input.addEventListener('input', () => recalcRow(row));
+        });
+        const adj = row.querySelector('.adj-input');
+        if (adj) adj.addEventListener('input', () => recalcRow(row));
+    });
+    // Placeholder ảo
+    document.querySelectorAll('.att-input').forEach(input => {
+        const ph = input.dataset.placeholder;
+        input.addEventListener('focus', function () {
+            if (this.value === '') { this._ph = true; this.value = ph; this.style.color = '#999'; }
+        });
+        input.addEventListener('keydown', function () {
+            if (this._ph) { this._ph = false; this.value = ''; this.style.color = ''; }
+        });
+        input.addEventListener('input', function () {
+            if (this._ph) { this._ph = false; this.value = this.value.replace(ph, ''); this.style.color = ''; }
+            else this.style.color = '';
+        });
+        input.addEventListener('blur', function () {
+            if (this._ph || this.value === ph) { this._ph = false; this.value = ''; this.style.color = ''; }
+        });
+    });
+})();
+</script>

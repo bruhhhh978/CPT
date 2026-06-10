@@ -1,0 +1,13 @@
+{# components/user_menu.html #}
+<div class="user-menu">
+    <span>
+        {% if user.profile.role == 'manager' %}<i class="fas fa-crown"></i>
+        {% elif user.profile.role == 'user' %}<i class="fas fa-user"></i>
+        {% else %}<i class="fas fa-eye"></i>
+        {% endif %}
+        {{ user.username }}
+    </span>
+    <div class="dropdown">
+        <a href="{% url 'login:logout' %}">Đăng xuất</a>
+    </div>
+</div>

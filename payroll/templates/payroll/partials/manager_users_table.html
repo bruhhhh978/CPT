@@ -1,0 +1,118 @@
+{# partials/manager_users_table.html - Bảng quản lý người dùng
+   Context: users, search_query, user_count, request #}
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;
+                border-bottom:2px solid #f0f0f0; padding-bottom:10px; margin-bottom:20px;">
+        <h3 style="margin:0; font-size:18px; font-weight:600;">
+            <i class="fas fa-users"></i> Danh sách người dùng ({{ user_count }})
+        </h3>
+        <form method="GET" action="{% url 'payroll:manager_dashboard' %}" style="display:flex; gap:5px;">
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm tên, email..."
+                   style="padding:6px 12px; border:1px solid #ddd; border-radius:4px; font-size:13px; width:200px;">
+            <button type="submit" class="btn btn-outline btn-small">
+                <i class="fas fa-search"></i>
+            </button>
+        </form>
+    </div>
+
+    {% if users %}
+    <div class="table-container">
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>Tên đăng nhập</th>
+                    <th>Họ tên</th>
+                    <th>Email</th>
+                    <th>Cấp độ</th>
+                    <th>Trạng thái</th>
+                    <th>Ngày tạo</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td><strong>{{ u.username }}</strong></td>
+                    <td>{{ u.first_name }} {{ u.last_name|default:"-" }}</td>
+                    <td>{{ u.email|default:"-" }}</td>
+                    <td>
+                        <span class="role-badge {{ u.profile.role }}">
+                            {% if u.profile.role == 'manager' %}Cấp 1 - Quản lý
+                            {% elif u.profile.role == 'user' %}Cấp 2 - Người dùng
+                            {% else %}Cấp 3 - Người xem{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        {% if u.is_active %}
+                        <span class="status-badge status-active">Đang hoạt động</span>
+                        {% else %}
+                        <span class="status-badge status-locked">Đã khóa</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ u.date_joined|date:"d/m/Y H:i" }}</td>
+                    <td>
+                        <div class="action-buttons">
+                            {# Đổi role #}
+                            <form method="POST" action="{% url 'payroll:edit_user' u.id %}" style="display:inline;">
+                                {% csrf_token %}
+                                <select name="role" onchange="this.form.submit();"
+                                        class="btn btn-outline btn-small" style="padding:6px; width:auto;">
+                                    <option value="manager" {% if u.profile.role == 'manager' %}selected{% endif %}>Cấp 1 - Quản lý</option>
+                                    <option value="user"    {% if u.profile.role == 'user'    %}selected{% endif %}>Cấp 2 - Người dùng</option>
+                                    <option value="viewer"  {% if u.profile.role == 'viewer'  %}selected{% endif %}>Cấp 3 - Người xem</option>
+                                </select>
+                            </form>
+
+                            {% if u != request.user %}
+                            <div style="display:flex; gap:4px;">
+                                {# Khóa / Mở #}
+                                <form method="POST" action="{% url 'payroll:toggle_user_status' u.id %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn {% if u.is_active %}btn-danger{% else %}btn-success{% endif %} btn-small">
+                                        <i class="fas {% if u.is_active %}fa-user-lock{% else %}fa-user-check{% endif %}"></i>
+                                        {% if u.is_active %}Khóa{% else %}Mở{% endif %}
+                                    </button>
+                                </form>
+
+                                {# Đặt lại mật khẩu #}
+                                <button type="button"
+                                        onclick="var p=prompt('Đặt lại mật khẩu cho {{ u.username|escapejs }}\n(Tối thiểu 6 ký tự):');
+                                                 if(p!==null){p=p.trim();
+                                                     if(p.length>=6){document.getElementById('pw_field_{{u.id}}').value=p; document.getElementById('pw_form_{{u.id}}').submit();}
+                                                     else if(p!==''){alert('Mật khẩu quá ngắn! Vui lòng nhập ít nhất 6 ký tự.');}}"
+                                        class="btn btn-outline btn-small">
+                                    <i class="fas fa-key"></i> Pass
+                                </button>
+                                <form id="pw_form_{{u.id}}" method="POST"
+                                      action="{% url 'payroll:reset_user_password' u.id %}" style="display:none;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="new_password" id="pw_field_{{u.id}}">
+                                </form>
+                            </div>
+
+                            {# Xóa tài khoản #}
+                            <form method="POST" action="{% url 'payroll:delete_user' u.id %}" style="display:inline;"
+                                  onsubmit="return confirm('Bạn có chắc muốn xóa tài khoản này?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger btn-small">
+                                    <i class="fas fa-trash"></i> Xóa
+                                </button>
+                            </form>
+
+                            {% else %}
+                            <span class="btn btn-outline btn-small" style="opacity:0.5; cursor:not-allowed;">
+                                <i class="fas fa-lock"></i> Tài khoản của bạn
+                            </span>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {% include "payroll/components/empty_state.html" with empty_icon="fa-inbox" empty_title="Chưa có người dùng nào" %}
+    {% endif %}
+</div>

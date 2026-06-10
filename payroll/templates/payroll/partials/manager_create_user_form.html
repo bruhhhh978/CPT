@@ -1,0 +1,43 @@
+{# partials/manager_create_user_form.html - Form tạo tài khoản mới trong manager dashboard #}
+<div class="card">
+    <h3 class="card-title"><i class="fas fa-user-plus"></i> Tạo tài khoản mới</h3>
+    <form method="POST" action="{% url 'payroll:create_user' %}" class="form-section">
+        {% csrf_token %}
+        <div class="form-row">
+            <div class="form-group">
+                <label for="username">Tên đăng nhập <span style="color:red">*</span></label>
+                <input type="text" id="username" name="username" required placeholder="Nhập tên đăng nhập">
+            </div>
+            <div class="form-group">
+                <label for="password">Mật khẩu <span style="color:red">*</span></label>
+                <input type="password" id="password" name="password" required minlength="6" placeholder="Tối thiểu 6 ký tự">
+                <small style="color:#666;font-size:11px;margin-top:4px;display:block;">Mật khẩu phải từ 6 ký tự trở lên.</small>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="Nhập email">
+            </div>
+            <div class="form-group">
+                <label for="role">Cấp độ <span style="color:red">*</span></label>
+                <select id="role" name="role" required>
+                    <option value="user">Cấp 2 - Người dùng</option>
+                    <option value="viewer">Cấp 3 - Người xem</option>
+                    <option value="manager">Cấp 1 - Quản lý</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="first_name">Họ</label>
+                <input type="text" id="first_name" name="first_name" placeholder="Nhập họ">
+            </div>
+            <div class="form-group">
+                <label for="last_name">Tên</label>
+                <input type="text" id="last_name" name="last_name" placeholder="Nhập tên">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Tạo tài khoản</button>
+    </form>
+</div>

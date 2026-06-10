@@ -1,0 +1,6 @@
+{# components/stat_card.html
+   Context: stat_label, stat_value, stat_accent (bool, optional) #}
+<div class="stat-card {% if stat_accent %}accent{% endif %}">
+    <span class="stat-label">{{ stat_label }}</span>
+    <strong class="stat-value">{{ stat_value }}</strong>
+</div>
