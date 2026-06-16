@@ -25,11 +25,8 @@ from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
 import datetime
 import calendar
 from decimal import Decimal, ROUND_HALF_UP
-<<<<<<< HEAD
 from django.contrib.auth.decorators import login_required
-=======
 
->>>>>>> e6e8007 (cap_nhat_cau_truc)
 # ============ MANAGER DASHBOARD & USER MANAGEMENT ============
 
 @manager_only
@@ -461,13 +458,11 @@ def payroll_sheet(request, pk=None):
         if not request.user.is_authenticated:
             messages.error(request, 'Vui lòng đăng nhập để xuất Excel.')
             return redirect('login:login')
-<<<<<<< HEAD
+
         log_activity(request, 'EXPORT', 'BaoCao',
                  description=f'Xuất Excel bảng lương {start_date.strftime("%d/%m")} - {end_date.strftime("%d/%m/%Y")}')
-        return export_payroll_excel(dates, start_date, end_date, view_type)
-=======
+
         return export_payroll_excel(dates, start_date, end_date, view_type, du_an_id=du_an_id)
->>>>>>> e6e8007 (cap_nhat_cau_truc)
 
     payroll_data = build_weekly_payroll_data(employees, dates, du_an_id=du_an_id)
 
@@ -687,10 +682,6 @@ def add_employee(request):
         emp = Employee.objects.create(
             name=name, date_of_birth=date_of_birth, position=pos, daily_wage=wage
         )
-<<<<<<< HEAD
-        log_activity(request, 'CREATE', 'NhanVien', object_repr=name, description=f'Thêm nhân viên: {name}')
-=======
-
         if du_an_id:
             try:
                 cong_trinh_obj = CongTrinh.objects.get(id=du_an_id)
@@ -718,7 +709,6 @@ def add_employee(request):
             except (CongTrinh.DoesNotExist, ValueError):
                 pass
 
->>>>>>> e6e8007 (cap_nhat_cau_truc)
         messages.success(request, f'Đã thêm nhân viên "{name}" thành công.')
 
         redirect_url = reverse('payroll:payroll_sheet')
@@ -901,17 +891,11 @@ def import_excel(request):
                         )
 
     redirect_date = first_target_date.strftime('%Y-%m-%d') if first_target_date else request.POST.get('current_date', '')
-<<<<<<< HEAD
-    log_activity(request, 'IMPORT', 'ChamCong',
-                 description=f'Import file Excel chấm công')
-    return redirect(reverse('payroll:payroll_sheet') + f"?date={redirect_date}")
-=======
     redirect_url = reverse('payroll:payroll_sheet') + f"?date={redirect_date}"
     if du_an_id:
         redirect_url += f"&du_an_id={du_an_id}"
     return redirect(redirect_url)
 
->>>>>>> e6e8007 (cap_nhat_cau_truc)
 
 def delete_all_data(request):
     if not request.user.is_authenticated:
@@ -1032,11 +1016,6 @@ def save_attendance(request):
                 adjustment.save()
 
         messages.success(request, 'Đã lưu dữ liệu chấm công và các khoản tăng/giảm thành công.')
-<<<<<<< HEAD
-        log_activity(request, 'UPDATE', 'ChamCong', description=f'Lưu chấm công ngày {current_date_str}')
-
-=======
->>>>>>> e6e8007 (cap_nhat_cau_truc)
         redirect_url = reverse('payroll:payroll_sheet') + f"?date={current_date_str}&view_type={view_type}"
         if search_query:
             redirect_url += f"&q={search_query}"
