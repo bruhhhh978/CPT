@@ -5,82 +5,280 @@
 
 {% block extra_head %}
 <style>
-.toolbar-row {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 1.25rem;
-    flex-wrap: wrap; background: var(--glass); padding: 12px;
-    border-radius: 12px; border: 1px solid var(--border);
-}
-.date-pill {
-    display: flex; align-items: center; gap: 4px; background: var(--glass);
-    border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px;
-    flex-shrink: 0; height: 36px; box-sizing: border-box;
-}
-.date-pill select { border: none; background: transparent; color: var(--text-main); font-size: 0.83rem; font-weight: 600; outline: none; cursor: pointer; }
-.date-pill .period-select { width: 220px; max-width: 220px; }
-.sep { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; margin: 0 2px; }
-.nav-btn {
-    width: 30px; height: 36px; display: flex; align-items: center; justify-content: center;
-    border: 1px solid var(--border); border-radius: 7px; background: var(--glass);
-    color: var(--text-muted); text-decoration: none; flex-shrink: 0; font-size: 0.75rem;
-    transition: background 0.15s, color 0.15s;
-}
-.nav-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
-.toolbar-search { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; }
-.toolbar-search .search-box {
-    display: flex; align-items: center; gap: 6px; border: 1px solid var(--border);
-    border-radius: 7px; padding: 0 10px; height: 36px; background: var(--glass); flex: 1;
-}
-.toolbar-search .search-box i { color: var(--text-muted); font-size: 0.8rem; }
-.toolbar-search .search-box input { border: none; background: transparent; outline: none; font-size: 0.83rem; color: var(--text-main); width: 100%; }
-.toolbar-row .btn { height: 36px; padding: 0 11px; font-size: 0.8rem; white-space: nowrap; flex-shrink: 0; display: flex; align-items: center; gap: 5px; box-sizing: border-box; }
-.btn-danger { background: #ef4444; color: #fff !important; border-color: #ef4444 !important; }
-.btn-danger:hover { background: #dc2626; border-color: #dc2626 !important; }
-.form-footer { margin-top: 1.5rem; display: flex; justify-content: flex-end; }
-.payroll-form { width: 100%; }
-.btn-lg { padding: 1rem 3rem; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-.modal-header h2 { font-size: 1.25rem; margin: 0; }
-.btn-close { padding: 0.25rem 0.5rem !important; background: none !important; border: none !important; color: var(--text-main); font-size: 1.5rem; cursor: pointer; }
-.form-hint { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; }
-.empty-state { text-align: center; padding: 4rem !important; color: var(--text-muted); }
-.empty-state i { font-size: 2.5rem; display: block; margin-bottom: 1rem; opacity: 0.5; }
-.empty-state a { color: var(--primary); font-weight: bold; text-decoration: underline; }
-.action-group { display: flex; gap: 0.5rem; justify-content: center; }
+    .toolbar-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 1.25rem;
+        flex-wrap: wrap;
+        background: var(--glass);
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+    }
 
-/* Sticky scrollbar proxy */
-.table-scrollbar-proxy {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; height: 22px;
-    overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border);
-    border-width: 1px 0 0; background: rgba(255,255,255,0.96);
-    box-shadow: 0 -6px 16px rgba(15,23,42,0.16); display: none;
-}
-.table-scrollbar-proxy.is-visible { display: block; }
-.table-scrollbar-proxy-inner { height: 1px; }
-body.has-table-scrollbar-proxy { padding-bottom: 30px; }
+    .date-pill {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--glass);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 10px;
+        flex-shrink: 0;
+        height: 36px;
+        box-sizing: border-box;
+    }
 
-/* Table container */
-.payroll-sheet-table-container {
-    --payroll-visible-rows: 12;
-    --payroll-header-row-height: 34px;
-    max-height: calc(var(--payroll-header-row-height) * 2 + var(--payroll-visible-rows) * 42px + 48px);
-    overflow: auto !important; overscroll-behavior: contain;
-    border: 1px solid var(--border); background: rgba(255,255,255,0.96);
-}
-.payroll-sheet-table-container .payroll-table thead th {
-    position: sticky; top: 0; z-index: 70; background: #fff7ed; box-shadow: 0 1px 0 var(--border);
-}
-.payroll-sheet-table-container .payroll-table thead tr:nth-child(2) th { top: var(--payroll-header-row-height); z-index: 69; }
-.payroll-sheet-table-container .payroll-table thead th.stt-col,
-.payroll-sheet-table-container .payroll-table thead th.name-col { z-index: 90; }
-.payroll-sheet-table-container .payroll-table tbody tr.summary-row td {
-    position: sticky; bottom: 0; z-index: 65; background: var(--surface, #fff8f0) !important;
-    box-shadow: 0 -2px 0 var(--primary), 0 -8px 18px rgba(15,23,42,0.12);
-}
-@media (max-width: 768px) {
-    .toolbar-search { order: 2; width: 100%; }
-    .date-pill, .nav-btn { order: 1; }
-    .sep { display: none; }
-}
+    .date-pill select {
+        border: none;
+        background: transparent;
+        color: var(--text-main);
+        font-size: 0.83rem;
+        font-weight: 600;
+        outline: none;
+        cursor: pointer;
+    }
+
+    .date-pill .period-select {
+        width: 220px;
+        max-width: 220px;
+    }
+
+    .sep {
+        width: 1px;
+        height: 24px;
+        background: var(--border);
+        flex-shrink: 0;
+        margin: 0 2px;
+    }
+
+    .nav-btn {
+        width: 30px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--glass);
+        color: var(--text-muted);
+        text-decoration: none;
+        flex-shrink: 0;
+        font-size: 0.75rem;
+        transition: background 0.15s, color 0.15s;
+    }
+
+    .nav-btn:hover {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+    }
+
+    .toolbar-search {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex: 1;
+        min-width: 0;
+    }
+
+    .toolbar-search .search-box {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 0 10px;
+        height: 36px;
+        background: var(--glass);
+        flex: 1;
+    }
+
+    .toolbar-search .search-box i {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
+
+    .toolbar-search .search-box input {
+        border: none;
+        background: transparent;
+        outline: none;
+        font-size: 0.83rem;
+        color: var(--text-main);
+        width: 100%;
+    }
+
+    .toolbar-row .btn {
+        height: 36px;
+        padding: 0 11px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        box-sizing: border-box;
+    }
+
+    .btn-danger {
+        background: #ef4444;
+        color: #fff !important;
+        border-color: #ef4444 !important;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+        border-color: #dc2626 !important;
+    }
+
+    .form-footer {
+        margin-top: 1.5rem;
+        display: flex;
+        justify-content: flex-end;
+    }
+
+    .payroll-form {
+        width: 100%;
+    }
+
+    .btn-lg {
+        padding: 1rem 3rem;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+    .modal-header h2 {
+        font-size: 1.25rem;
+        margin: 0;
+    }
+
+    .btn-close {
+        padding: 0.25rem 0.5rem !important;
+        background: none !important;
+        border: none !important;
+        color: var(--text-main);
+        font-size: 1.5rem;
+        cursor: pointer;
+    }
+
+    .form-hint {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-bottom: 1rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem !important;
+        color: var(--text-muted);
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .empty-state a {
+        color: var(--primary);
+        font-weight: bold;
+        text-decoration: underline;
+    }
+
+    .action-group {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+    }
+
+    /* Sticky scrollbar proxy */
+    .table-scrollbar-proxy {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 900;
+        height: 22px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border: 1px solid var(--border);
+        border-width: 1px 0 0;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.16);
+        display: none;
+    }
+
+    .table-scrollbar-proxy.is-visible {
+        display: block;
+    }
+
+    .table-scrollbar-proxy-inner {
+        height: 1px;
+    }
+
+    body.has-table-scrollbar-proxy {
+        padding-bottom: 30px;
+    }
+
+    /* Table container */
+    .payroll-sheet-table-container {
+        --payroll-visible-rows: 12;
+        --payroll-header-row-height: 34px;
+        max-height: calc(var(--payroll-header-row-height) * 2 + var(--payroll-visible-rows) * 42px + 48px);
+        overflow: auto !important;
+        overscroll-behavior: contain;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.96);
+    }
+
+    .payroll-sheet-table-container .payroll-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 70;
+        background: #fff7ed;
+        box-shadow: 0 1px 0 var(--border);
+    }
+
+    .payroll-sheet-table-container .payroll-table thead tr:nth-child(2) th {
+        top: var(--payroll-header-row-height);
+        z-index: 69;
+    }
+
+    .payroll-sheet-table-container .payroll-table thead th.stt-col,
+    .payroll-sheet-table-container .payroll-table thead th.name-col {
+        z-index: 90;
+    }
+
+    .payroll-sheet-table-container .payroll-table tbody tr.summary-row td {
+        position: sticky;
+        bottom: 0;
+        z-index: 65;
+        background: var(--surface, #fff8f0) !important;
+        box-shadow: 0 -2px 0 var(--primary), 0 -8px 18px rgba(15, 23, 42, 0.12);
+    }
+
+    @media (max-width: 768px) {
+        .toolbar-search {
+            order: 2;
+            width: 100%;
+        }
+
+        .date-pill,
+        .nav-btn {
+            order: 1;
+        }
+
+        .sep {
+            display: none;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -103,16 +301,18 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
         </button>
         {% endif %}
 
-        <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}" class="btn btn-outline">
+        <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}"
+            class="btn btn-outline">
             <i class="fas fa-chart-column"></i> Thống kê
         </a>
-        <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&export=excel" class="btn btn-primary">
+        <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&export=excel{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
+            class="btn btn-primary">
             <i class="fas fa-file-excel"></i> Xuất Excel
         </a>
 
         {% if can_edit %}
         <form method="POST" action="{% url 'payroll:delete_all_data' %}" style="display:inline;"
-              onsubmit="return confirm('CẢNH BÁO: Sẽ xóa toàn bộ chấm công{% if du_an_obj %} của dự án {{ du_an_obj.ten_cong_trinh }}{% endif %}. Bạn có chắc không?')">
+            onsubmit="return confirm('CẢNH BÁO: Sẽ xóa toàn bộ chấm công{% if du_an_obj %} của dự án {{ du_an_obj.ten_cong_trinh }}{% endif %}. Bạn có chắc không?')">
             {% csrf_token %}
             <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
             <button type="submit" class="btn btn-danger"><i class="fas fa-trash-alt"></i> Xóa tất cả</button>
@@ -121,12 +321,11 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
     </div>
 
     {# ── Form chấm công ── #}
-    <form action="{% url 'payroll:save_attendance' %}" method="POST" class="payroll-form"
-          {% if not can_edit %}style="pointer-events:none; opacity:0.6;"{% endif %}>
+    <form action="{% url 'payroll:save_attendance' %}" method="POST" class="payroll-form" {% if not can_edit %}style="pointer-events:none; opacity:0.6;"{% endif %}>
         {% csrf_token %}
         <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
-        <input type="hidden" name="view_type"    value="{{ view_type }}">
-        <input type="hidden" name="du_an_id"     value="{{ du_an_id }}">
+        <input type="hidden" name="view_type" value="{{ view_type }}">
+        <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
 
         {% include "payroll/partials/payroll_table.html" %}
 
@@ -158,44 +357,44 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
 {% include "payroll/partials/payroll_realtime_calc.html" %}
 
 <script>
-// Đóng modal khi click nền
-window.onclick = function (e) {
-    if (e.target.classList.contains('modal')) e.target.style.display = 'none';
-};
+    // Đóng modal khi click nền
+    window.onclick = function (e) {
+        if (e.target.classList.contains('modal')) e.target.style.display = 'none';
+    };
 
-// Sticky scrollbar proxy
-(function () {
-    const tc = document.querySelector('.table-container');
-    const proxy = document.querySelector('.table-scrollbar-proxy');
-    const pi = document.querySelector('.table-scrollbar-proxy-inner');
-    if (!tc || !proxy || !pi) return;
-    document.body.appendChild(proxy);
-    let syncing = false;
-    function update() {
-        pi.style.width = tc.scrollWidth + 'px';
-        proxy.scrollLeft = tc.scrollLeft;
-        const show = tc.scrollWidth > tc.clientWidth + 1;
-        proxy.classList.toggle('is-visible', show);
-        document.body.classList.toggle('has-table-scrollbar-proxy', show);
-    }
-    tc.addEventListener('scroll', () => { if (!syncing) { syncing=true; proxy.scrollLeft=tc.scrollLeft; syncing=false; } });
-    proxy.addEventListener('scroll', () => { if (!syncing) { syncing=true; tc.scrollLeft=proxy.scrollLeft; syncing=false; } });
-    window.addEventListener('resize', update);
-    window.addEventListener('load', update);
-    update();
-    if ('ResizeObserver' in window) new ResizeObserver(update).observe(tc);
-})();
+    // Sticky scrollbar proxy
+    (function () {
+        const tc = document.querySelector('.table-container');
+        const proxy = document.querySelector('.table-scrollbar-proxy');
+        const pi = document.querySelector('.table-scrollbar-proxy-inner');
+        if (!tc || !proxy || !pi) return;
+        document.body.appendChild(proxy);
+        let syncing = false;
+        function update() {
+            pi.style.width = tc.scrollWidth + 'px';
+            proxy.scrollLeft = tc.scrollLeft;
+            const show = tc.scrollWidth > tc.clientWidth + 1;
+            proxy.classList.toggle('is-visible', show);
+            document.body.classList.toggle('has-table-scrollbar-proxy', show);
+        }
+        tc.addEventListener('scroll', () => { if (!syncing) { syncing = true; proxy.scrollLeft = tc.scrollLeft; syncing = false; } });
+        proxy.addEventListener('scroll', () => { if (!syncing) { syncing = true; tc.scrollLeft = proxy.scrollLeft; syncing = false; } });
+        window.addEventListener('resize', update);
+        window.addEventListener('load', update);
+        update();
+        if ('ResizeObserver' in window) new ResizeObserver(update).observe(tc);
+    })();
 
-// Header height cho sticky row thứ 2
-(function () {
-    const wrap = document.querySelector('.payroll-sheet-table-container');
-    const hRow = document.querySelector('.payroll-table thead tr:first-child');
-    if (!wrap || !hRow) return;
-    function upd() { wrap.style.setProperty('--payroll-header-row-height', hRow.offsetHeight + 'px'); }
-    window.addEventListener('load', upd);
-    window.addEventListener('resize', upd);
-    upd();
-    if ('ResizeObserver' in window) new ResizeObserver(upd).observe(hRow);
-})();
+    // Header height cho sticky row thứ 2
+    (function () {
+        const wrap = document.querySelector('.payroll-sheet-table-container');
+        const hRow = document.querySelector('.payroll-table thead tr:first-child');
+        if (!wrap || !hRow) return;
+        function upd() { wrap.style.setProperty('--payroll-header-row-height', hRow.offsetHeight + 'px'); }
+        window.addEventListener('load', upd);
+        window.addEventListener('resize', upd);
+        upd();
+        if ('ResizeObserver' in window) new ResizeObserver(upd).observe(hRow);
+    })();
 </script>
 {% endblock %}

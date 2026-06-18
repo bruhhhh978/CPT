@@ -1026,15 +1026,34 @@ def save_attendance(request):
     return redirect('payroll:payroll_sheet')
 
 
-def export_payroll_excel(dates, start_date, end_date, view_type='week', du_an_id=None):
+def export_payroll_excel(dates, start_date, end_date, view_type='week', du_an_id=None, export_address=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "Bang Cham Cong"
+
+    du_an_name = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+            du_an_name = du_an_obj.ten_cong_trinh
+            if not export_address:
+                export_address = du_an_obj.dia_diem
+        except (CongTrinh.DoesNotExist, ValueError):
+            pass
+    export_address = (export_address or "TP. Hồ Chí Minh").strip()
+
     ws.merge_cells('A1:E1')
     ws['A1'] = "CÔNG TY TNHH XÂY DỰNG CPT"
     ws['A1'].font = Font(bold=True, size=12)
+
     ws.merge_cells('A2:E2')
-    ws['A2'] = "Địa chỉ: TP. Hồ Chí Minh"
+    if du_an_name:
+        ws['A2'] = f"Công trình: {du_an_name} — Địa chỉ: {export_address}"
+    else:
+        ws['A2'] = f"Địa chỉ: {export_address}"
+    ws['A2'].font = Font(italic=True, size=10)
+
+    # Thêm dòng địa chỉ riêng (chèn vào row mới, đẩy các phần dưới xuống 1 dòng)
     total_cols_count = 3 + 2 * len(dates) + 7
     from openpyxl.utils import get_column_letter
     max_col_letter = get_column_letter(total_cols_count)
@@ -1083,11 +1102,24 @@ def export_payroll_excel(dates, start_date, end_date, view_type='week', du_an_id
         employees = Employee.objects.filter(id__in=emp_ids).exclude(name__in=SUMMARY_NAMES).order_by('name')
     else:
         employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
+
+    max_name_length = max((len(emp.name or '') for emp in employees), default=len('Ho ten'))
+    name_column_width = min(max(max_name_length + 4, 32), 50)
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = name_column_width
+    ws.column_dimensions['C'].width = 10
+    for date_col in range(4, col_offset):
+        ws.column_dimensions[get_column_letter(date_col)].width = 7
+    result_widths = [10, 10, 13, 13, 14, 12, 18]
+    for i, width in enumerate(result_widths):
+        ws.column_dimensions[get_column_letter(col_offset + i)].width = width
+
     row_num = 6
     border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
     for idx, emp in enumerate(employees, 1):
         ws.cell(row=row_num, column=1).value = idx
         ws.cell(row=row_num, column=2).value = emp.name
+        ws.cell(row=row_num, column=2).alignment = Alignment(horizontal='left')
         ws.cell(row=row_num, column=3).value = emp.position
         total_hc = Decimal('0.0')
         total_tc = Decimal('0.0')
@@ -1122,7 +1154,13 @@ def export_payroll_excel(dates, start_date, end_date, view_type='week', du_an_id
             cell.border = border
             if not cell.alignment.horizontal:
                 cell.alignment = Alignment(horizontal='center')
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = name_column_width
+    ws.column_dimensions['C'].width = 10
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
     if view_type == 'month':
         response['Content-Disposition'] = f'attachment; filename=BangLuongThang_{start_date.strftime("%m_%Y")}.xlsx'
     else:
