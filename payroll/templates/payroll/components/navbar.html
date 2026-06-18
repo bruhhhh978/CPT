@@ -6,6 +6,7 @@
     <nav class="nav-links">
         <a href="{% url 'payroll:du_an_list' %}">Dự án</a>
         <a href="{% url 'payroll:seniority_table' %}">Thâm niên</a>
+        <a href="{% url 'payroll:tet_bonus_2025' %}">Thưởng Tết</a>
         {% if user.is_authenticated %}
             {% if user.profile.role == 'manager' %}
             <a href="{% url 'payroll:manager_dashboard' %}" style="color:#f093fb;font-weight:600;">

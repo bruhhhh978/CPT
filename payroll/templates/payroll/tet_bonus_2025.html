@@ -1,0 +1,529 @@
+{% extends 'payroll/base.html' %}
+{% load humanize %}
+
+{% block title %}Bảng thưởng Tết {{ bonus_year }} - CPT{% endblock %}
+
+{% block extra_head %}
+<style>
+.tet-shell {
+    display: grid;
+    gap: 1rem;
+}
+
+.tet-controls {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: nowrap;
+}
+
+.tet-controls select,
+.tet-controls input {
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    background: #fff;
+    color: var(--text-main);
+    font-size: .85rem;
+    font-weight: 600;
+    outline: none;
+}
+
+.tet-controls select {
+    min-width: 220px;
+    padding: 0 .65rem;
+}
+
+.tet-controls input {
+    min-width: 260px;
+    padding: 0 .8rem;
+}
+
+.tet-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(170px, 1fr));
+    gap: .85rem;
+}
+
+.tet-stat {
+    background: rgba(255,255,255,.9);
+    border: 1px solid var(--border);
+    border-radius: .75rem;
+    padding: 1rem;
+}
+
+.tet-stat span {
+    display: block;
+    color: var(--text-muted);
+    font-size: .8rem;
+    margin-bottom: .4rem;
+}
+
+.tet-stat strong {
+    font-size: 1.55rem;
+    color: var(--text-main);
+}
+
+.tet-stat.accent {
+    background: #fff7ed;
+    border-color: #fed7aa;
+}
+
+.tet-policy-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.tet-policy {
+    background: rgba(255,255,255,.9);
+    border: 1px solid var(--border);
+    border-radius: .75rem;
+    padding: 1rem;
+}
+
+.tet-policy h3 {
+    font-size: .98rem;
+    margin-bottom: .65rem;
+}
+
+.tet-policy p,
+.tet-policy li {
+    color: var(--text-muted);
+    font-size: .82rem;
+    line-height: 1.5;
+}
+
+.tet-policy .formula {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: .75rem;
+    padding: .5rem .65rem;
+    border-radius: .5rem;
+    background: #fff7ed;
+    color: #7c2d12;
+    font-size: .84rem;
+    font-weight: 800;
+}
+
+.tet-policy ul {
+    display: grid;
+    gap: .45rem;
+    margin: .65rem 0 0;
+    padding-left: 1.1rem;
+}
+
+.tet-policy li strong {
+    color: var(--text-main);
+}
+
+.tet-rate-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .7rem;
+    margin-top: .7rem;
+}
+
+.tet-rate-box {
+    border: 1px solid var(--border);
+    border-radius: .6rem;
+    padding: .75rem;
+    background: rgba(255,255,255,.75);
+}
+
+.tet-rate-box h4 {
+    margin-bottom: .45rem;
+    font-size: .86rem;
+}
+
+.tet-edit-panel {
+    display: grid;
+    gap: 1rem;
+}
+
+.tet-edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: .25rem;
+}
+
+.tet-edit-header h3 {
+    font-size: 1rem;
+}
+
+.tet-edit-header p {
+    color: var(--text-muted);
+    font-size: .84rem;
+    margin-top: .25rem;
+}
+
+.tet-setting-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    gap: .8rem;
+}
+
+.tet-setting-group {
+    border: 1px solid var(--border);
+    border-radius: .65rem;
+    padding: .85rem;
+    background: rgba(255,255,255,.86);
+}
+
+.tet-setting-group h4 {
+    margin-bottom: .75rem;
+    color: var(--text-main);
+    font-size: .88rem;
+}
+
+.tet-setting-field {
+    display: grid;
+    gap: .3rem;
+    margin-bottom: .65rem;
+}
+
+.tet-setting-field:last-child {
+    margin-bottom: 0;
+}
+
+.tet-setting-field label {
+    color: var(--text-muted);
+    font-size: .76rem;
+    line-height: 1.35;
+}
+
+.tet-setting-field input {
+    height: 36px;
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: .45rem;
+    padding: 0 .6rem;
+    text-align: right;
+    font-weight: 700;
+    color: var(--text-main);
+    background: #fff;
+}
+
+.tet-setting-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: .65rem;
+}
+
+.tet-table-container {
+    max-height: 68vh;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    background: #fff;
+    scrollbar-width: auto !important;
+}
+
+.tet-table-container::-webkit-scrollbar {
+    display: block !important;
+    width: 9px;
+    height: 9px;
+}
+
+.tet-table-container::-webkit-scrollbar-track {
+    background: #f3f4f6;
+}
+
+.tet-table-container::-webkit-scrollbar-thumb {
+    background: #fdba74;
+    border-radius: 6px;
+}
+
+.tet-table {
+    margin-top: 0 !important;
+}
+
+.tet-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #fff7ed;
+    color: #7c2d12;
+    border-bottom: 2px solid #fed7aa !important;
+    text-align: center;
+}
+
+.tet-table td {
+    text-align: center;
+}
+
+.tet-table .name-cell {
+    text-align: left;
+    font-weight: 700;
+    min-width: 190px;
+}
+
+.tet-table .money-cell {
+    text-align: right;
+    font-weight: 700;
+    min-width: 115px;
+}
+
+.tet-table .total-cell {
+    color: #047857;
+    font-size: .82rem;
+}
+
+.type-pill,
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+    min-height: 26px;
+    padding: .25rem .6rem;
+    border-radius: 999px;
+    font-size: .76rem;
+    font-weight: 800;
+}
+
+.type-old {
+    background: rgba(16,185,129,.12);
+    color: #047857;
+}
+
+.type-new {
+    background: rgba(59,130,246,.12);
+    color: #1d4ed8;
+}
+
+.status-success {
+    background: rgba(16,185,129,.12);
+    color: #047857;
+}
+
+.status-warning {
+    background: rgba(245,158,11,.14);
+    color: #92400e;
+}
+
+.status-danger {
+    background: rgba(239,68,68,.12);
+    color: #b91c1c;
+}
+
+.status-muted {
+    background: rgba(100,116,139,.12);
+    color: #475569;
+}
+
+.scope-banner {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    background: rgba(249,115,22,.08);
+    border: 1px solid rgba(249,115,22,.28);
+    border-radius: .65rem;
+    padding: .7rem .9rem;
+    color: var(--text-main);
+    font-size: .9rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tet-shell">
+    <div class="card">
+        <form method="GET" class="tet-controls">
+            <select name="du_an_id" onchange="this.form.submit()">
+                <option value="">Tất cả công trình</option>
+                {% for project in projects %}
+                <option value="{{ project.id }}" {% if du_an_id|stringformat:'s' == project.id|stringformat:'s' %}selected{% endif %}>
+                    {{ project.ten_cong_trinh }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên">
+            <button type="submit" class="btn btn-outline"><i class="fas fa-search"></i> Tìm</button>
+            {% if search_query or du_an_id %}
+            <a class="btn btn-outline" href="{% url 'payroll:tet_bonus_2025' %}">Xóa lọc</a>
+            {% endif %}
+
+            <div style="flex:1;"></div>
+            <a href="{% url 'payroll:seniority_table' %}?month={{ bonus_year }}-12" class="btn btn-primary">
+                <i class="fas fa-clock"></i> Bảng thâm niên
+            </a>
+        </form>
+    </div>
+
+    {% if du_an_obj %}
+    <div class="scope-banner">
+        <i class="fas fa-hard-hat" style="color:var(--primary);"></i>
+        <strong>Công trình:</strong>
+        <span>{{ du_an_obj.ten_cong_trinh }}</span>
+    </div>
+    {% endif %}
+
+    <div class="tet-stats">
+        <div class="tet-stat">
+            <span>Tổng công nhân</span>
+            <strong>{{ total_workers }}</strong>
+        </div>
+        <div class="tet-stat">
+            <span>Cũ có thâm niên</span>
+            <strong>{{ old_worker_count }}</strong>
+        </div>
+        <div class="tet-stat">
+            <span>Mới chưa thâm niên</span>
+            <strong>{{ new_worker_count }}</strong>
+        </div>
+        <div class="tet-stat accent">
+            <span>Tổng thưởng Tết {{ bonus_year }}</span>
+            <strong>{{ total_bonus|floatformat:0|intcomma }} đ</strong>
+        </div>
+    </div>
+
+    {% if can_edit_bonus %}
+    <div class="card tet-edit-panel">
+        <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
+            <input type="hidden" name="q" value="{{ search_query }}">
+            <div class="tet-edit-header">
+                <div>
+                    <h3>Chỉnh mức thưởng Tết {{ bonus_year }}</h3>
+                    <p>Chỉ người dùng cấp 1 được thay đổi các mức này. Sau khi lưu, bảng tính bên dưới sẽ cập nhật theo mức mới.</p>
+                </div>
+                <div class="tet-setting-actions">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Lưu mức thưởng
+                    </button>
+                </div>
+            </div>
+
+            <div class="tet-setting-grid">
+                {% for group in bonus_setting_groups %}
+                <div class="tet-setting-group">
+                    <h4>{{ group.name }}</h4>
+                    {% for item in group.items %}
+                    <div class="tet-setting-field">
+                        <label for="setting-{{ item.key }}">{{ item.label }}</label>
+                        <input
+                            id="setting-{{ item.key }}"
+                            name="{{ item.key }}"
+                            type="number"
+                            min="0"
+                            step="1000"
+                            value="{{ item.amount }}"
+                        >
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    <div class="tet-policy-grid">
+        <div class="tet-policy">
+            <h3>Công nhân cũ có thâm niên</h3>
+            <div class="formula">
+                <i class="fas fa-calculator"></i>
+                <span>Tổng thưởng = Thưởng theo tháng + Thưởng thâm niên</span>
+            </div>
+            <ul>
+                <li><strong>Thợ:</strong> {{ bonus_settings.old_tho_monthly|floatformat:0|intcomma }} đ x số tháng làm việc trong năm {{ bonus_year }}</li>
+                <li><strong>Phụ:</strong> {{ bonus_settings.old_phu_monthly|floatformat:0|intcomma }} đ x số tháng làm việc trong năm {{ bonus_year }}</li>
+                <li><strong>Thâm niên:</strong> lấy theo mốc thâm niên đang tính trong bảng thâm niên.</li>
+            </ul>
+        </div>
+        <div class="tet-policy">
+            <h3>Công nhân mới chưa có thâm niên</h3>
+            <div class="formula">
+                <i class="fas fa-calendar-check"></i>
+                <span>Tổng thưởng = Mức cố định theo số tháng làm việc</span>
+            </div>
+            <div class="tet-rate-grid">
+                <div class="tet-rate-box">
+                    <h4>Thợ</h4>
+                    <ul>
+                        <li>Từ 6 tháng: <strong>{{ bonus_settings.new_tho_6|floatformat:0|intcomma }} đ</strong></li>
+                        <li>Từ 4 đến dưới 6 tháng: <strong>{{ bonus_settings.new_tho_4|floatformat:0|intcomma }} đ</strong></li>
+                        <li>Từ 2 đến dưới 4 tháng: <strong>{{ bonus_settings.new_tho_2|floatformat:0|intcomma }} đ</strong></li>
+                        <li>Dưới 2 tháng: <strong>{{ bonus_settings.new_tho_0|floatformat:0|intcomma }} đ</strong></li>
+                    </ul>
+                </div>
+                <div class="tet-rate-box">
+                    <h4>Phụ</h4>
+                    <ul>
+                        <li>Từ 6 tháng: <strong>{{ bonus_settings.new_phu_6|floatformat:0|intcomma }} đ</strong></li>
+                        <li>Từ 4 đến dưới 6 tháng: <strong>{{ bonus_settings.new_phu_4|floatformat:0|intcomma }} đ</strong></li>
+                        <li>Từ 2 đến dưới 4 tháng: <strong>{{ bonus_settings.new_phu_2|floatformat:0|intcomma }} đ</strong></li>
+                        <li>Dưới 2 tháng: <strong>{{ bonus_settings.new_phu_0|floatformat:0|intcomma }} đ</strong></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="section-heading">
+            <div>
+                <h3>Bảng tính thưởng Tết năm {{ bonus_year }}</h3>
+                <p>Số tháng làm việc tính theo tháng có chấm công trong năm {{ bonus_year }}. Thâm niên chốt đến 31/12/{{ bonus_year }}.</p>
+            </div>
+        </div>
+
+        <div class="table-container tet-table-container">
+            <table class="tet-table">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Họ tên</th>
+                        <th>Nghề</th>
+                        <th>Phân loại</th>
+                        <th>Tháng làm {{ bonus_year }}</th>
+                        <th>Đơn giá tháng</th>
+                        <th>Thưởng theo tháng</th>
+                        <th>Thâm niên</th>
+                        <th>Mức thâm niên</th>
+                        <th>Thưởng thâm niên</th>
+                        <th>Thưởng CN mới</th>
+                        <th>Tổng thưởng</th>
+                        <th>Trạng thái thâm niên</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in bonus_rows %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td class="name-cell">{{ row.employee.name }}</td>
+                        <td>{{ row.employee.position }}</td>
+                        <td>
+                            <span class="type-pill {% if row.seniority_months >= 12 %}type-old{% else %}type-new{% endif %}">
+                                {{ row.worker_type }}
+                            </span>
+                        </td>
+                        <td>{{ row.worked_months }}</td>
+                        <td class="money-cell">{{ row.monthly_rate|floatformat:0|intcomma }} đ</td>
+                        <td class="money-cell">{{ row.monthly_bonus|floatformat:0|intcomma }} đ</td>
+                        <td>{{ row.seniority_text }}</td>
+                        <td>{{ row.seniority_tier }}</td>
+                        <td class="money-cell">{{ row.seniority_bonus|floatformat:0|intcomma }} đ</td>
+                        <td class="money-cell">{{ row.new_worker_bonus|floatformat:0|intcomma }} đ</td>
+                        <td class="money-cell total-cell">{{ row.total_bonus|floatformat:0|intcomma }} đ</td>
+                        <td>
+                            <span class="status-pill status-{{ row.status_class }}">{{ row.status }}</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="13" class="empty-state-cell">Không có dữ liệu.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
