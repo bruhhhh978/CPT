@@ -547,7 +547,7 @@ def build_seniority_rows(employees, attendance_map, as_of_date):
     return rows
 
 
-TET_BONUS_YEAR = 2025
+TET_BONUS_DEFAULT_YEAR = 2025
 TET_BONUS_MONTHLY_RATES = {
     'tho': 100000,
     'phu': 70000,
@@ -626,6 +626,37 @@ def parse_money_input(value):
     return max(int(normalized), 0)
 
 
+def parse_tet_bonus_year(value):
+    try:
+        year = int(str(value or '').strip())
+    except (TypeError, ValueError):
+        return TET_BONUS_DEFAULT_YEAR
+
+    current_year = timezone.now().date().year
+    if year < 2000 or year > current_year:
+        return TET_BONUS_DEFAULT_YEAR
+    return year
+
+
+def get_tet_bonus_year_options(selected_year):
+    years = set(
+        Attendance.objects.exclude(date__isnull=True)
+        .values_list('date__year', flat=True)
+        .distinct()
+    )
+    years.add(TET_BONUS_DEFAULT_YEAR)
+    years.add(selected_year)
+    years.add(timezone.now().date().year)
+    return [
+        {
+            'value': str(year),
+            'label': f'Năm {year}',
+            'selected': year == selected_year,
+        }
+        for year in sorted(years, reverse=True)
+    ]
+
+
 def normalize_tet_position(position):
     normalized = (position or '').strip().lower()
     if normalized in ('tho', 'thợ'):
@@ -663,6 +694,8 @@ def get_tet_new_worker_bonus(position_key, worked_months, settings_map):
 
 @allow_viewer
 def tet_bonus_2025(request):
+    selected_year = parse_tet_bonus_year(request.POST.get('year') if request.method == 'POST' else request.GET.get('year'))
+
     if request.method == 'POST':
         try:
             is_manager = request.user.is_authenticated and request.user.profile.role == 'manager'
@@ -689,12 +722,12 @@ def tet_bonus_2025(request):
             request,
             'UPDATE',
             'ThuongTet',
-            object_repr=f'Chinh sach {TET_BONUS_YEAR}',
-            description=f'Cập nhật {saved_count} mức thưởng Tết {TET_BONUS_YEAR}',
+            object_repr=f'Chinh sach {selected_year}',
+            description=f'Cập nhật {saved_count} mức thưởng Tết {selected_year}',
         )
         messages.success(request, 'Đã cập nhật mức thưởng Tết thành công.')
         redirect_url = reverse('payroll:tet_bonus_2025')
-        query_parts = []
+        query_parts = [urlencode({'year': selected_year})]
         du_an_id_post = request.POST.get('du_an_id', '').strip()
         search_query_post = request.POST.get('q', '').strip()
         if du_an_id_post:
@@ -714,8 +747,9 @@ def tet_bonus_2025(request):
             du_an_id = ''
 
     search_query = request.GET.get('q', '').strip()
-    year_start = datetime.date(TET_BONUS_YEAR, 1, 1)
-    year_end = datetime.date(TET_BONUS_YEAR, 12, 31)
+    year_start = datetime.date(selected_year, 1, 1)
+    year_end = datetime.date(selected_year, 12, 31)
+    as_of_date = min(year_end, timezone.now().date())
     bonus_settings = get_tet_bonus_settings()
     summary_names = [
         'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
@@ -735,7 +769,7 @@ def tet_bonus_2025(request):
     employee_ids = [emp.id for emp in employees]
     attendance_qs = Attendance.objects.filter(
         Q(regular_workday__gt=0) | Q(overtime_workday__gt=0),
-        date__lte=year_end,
+        date__lte=as_of_date,
         employee_id__in=employee_ids,
     ).order_by('date')
     if du_an_id:
@@ -748,7 +782,7 @@ def tet_bonus_2025(request):
         if year_start <= att.date <= year_end:
             worked_month_map.setdefault(att.employee_id, set()).add((att.date.year, att.date.month))
 
-    seniority_rows = build_seniority_rows(employees, attendance_map, year_end)
+    seniority_rows = build_seniority_rows(employees, attendance_map, as_of_date)
     bonus_rows = []
     total_bonus = 0
     old_worker_count = 0
@@ -758,7 +792,7 @@ def tet_bonus_2025(request):
         emp = seniority_row['employee']
         position_key = normalize_tet_position(emp.position)
         worked_months = len(worked_month_map.get(emp.id, set()))
-        seniority_months = completed_months_between(seniority_row.get('active_start_date'), year_end)
+        seniority_months = completed_months_between(seniority_row.get('active_start_date'), as_of_date)
         if seniority_row.get('status_class') == 'danger':
             seniority_months = 0
 
@@ -813,7 +847,10 @@ def tet_bonus_2025(request):
         'du_an_id': du_an_id,
         'du_an_obj': du_an_obj,
         'search_query': search_query,
-        'bonus_year': str(TET_BONUS_YEAR),
+        'bonus_year': str(selected_year),
+        'selected_year': selected_year,
+        'as_of_date': as_of_date,
+        'year_options': get_tet_bonus_year_options(selected_year),
         'total_workers': len(bonus_rows),
         'old_worker_count': old_worker_count,
         'new_worker_count': new_worker_count,

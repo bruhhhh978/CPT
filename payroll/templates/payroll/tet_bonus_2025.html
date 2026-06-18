@@ -333,6 +333,12 @@
 <div class="tet-shell">
     <div class="card">
         <form method="GET" class="tet-controls">
+            <select name="year" onchange="this.form.submit()">
+                {% for option in year_options %}
+                <option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+
             <select name="du_an_id" onchange="this.form.submit()">
                 <option value="">Tất cả công trình</option>
                 {% for project in projects %}
@@ -345,7 +351,7 @@
             <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên">
             <button type="submit" class="btn btn-outline"><i class="fas fa-search"></i> Tìm</button>
             {% if search_query or du_an_id %}
-            <a class="btn btn-outline" href="{% url 'payroll:tet_bonus_2025' %}">Xóa lọc</a>
+            <a class="btn btn-outline" href="{% url 'payroll:tet_bonus_2025' %}?year={{ bonus_year }}">Xóa lọc</a>
             {% endif %}
 
             <div style="flex:1;"></div>
@@ -386,6 +392,7 @@
     <div class="card tet-edit-panel">
         <form method="POST">
             {% csrf_token %}
+            <input type="hidden" name="year" value="{{ bonus_year }}">
             <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
             <input type="hidden" name="q" value="{{ search_query }}">
             <div class="tet-edit-header">
@@ -470,7 +477,7 @@
         <div class="section-heading">
             <div>
                 <h3>Bảng tính thưởng Tết năm {{ bonus_year }}</h3>
-                <p>Số tháng làm việc tính theo tháng có chấm công trong năm {{ bonus_year }}. Thâm niên chốt đến 31/12/{{ bonus_year }}.</p>
+                <p>Số tháng làm việc tính theo tháng có chấm công trong năm {{ bonus_year }}. Thâm niên chốt đến {{ as_of_date|date:'d/m/Y' }}.</p>
             </div>
         </div>
 
