@@ -5,28 +5,97 @@
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+.stats-toolbar-card {
+    padding: .85rem;
+}
+.stats-toolbar {
+    display: grid;
+    grid-template-columns: minmax(360px, auto) minmax(280px, 1fr) auto;
+    gap: .75rem;
+    align-items: center;
+}
+.stats-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+}
+.stats-toolbar-period {
+    justify-content: flex-start;
+}
+.stats-toolbar-search {
+    justify-content: center;
+}
+.stats-toolbar-actions {
+    justify-content: flex-end;
+}
+.stats-toolbar .date-pill {
+    background: #fff;
+    margin: 0;
+}
+.stats-toolbar .date-pill .period-select {
+    width: 240px;
+    max-width: 240px;
+}
+.stats-toolbar .toolbar-search {
+    flex: 1 1 420px !important;
+    max-width: 560px;
+    min-width: 260px;
+}
+.stats-toolbar .toolbar-search .search-box {
+    background: #fff;
+}
+.stats-toolbar .btn,
+.stats-toolbar .nav-btn {
+    height: 36px;
+    box-sizing: border-box;
+}
+.stats-toolbar .btn {
+    padding: 0 .85rem;
+    white-space: nowrap;
+}
+@media (max-width: 1100px) {
+    .stats-toolbar {
+        grid-template-columns: 1fr;
+    }
+    .stats-toolbar-group,
+    .stats-toolbar-search,
+    .stats-toolbar-actions {
+        justify-content: flex-start;
+    }
+    .stats-toolbar .toolbar-search {
+        max-width: none;
+        width: 100%;
+        flex-basis: 100% !important;
+    }
+}
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="stats-shell">
 
     {# ── Toolbar ── #}
-    <div class="card">
-        <div class="controls">
-            {% include "payroll/components/period_picker.html" %}
+    <div class="card stats-toolbar-card">
+        <div class="stats-toolbar">
+            <div class="stats-toolbar-group stats-toolbar-period">
+                {% include "payroll/components/period_picker.html" %}
+            </div>
 
-            <a href="{% url 'payroll:tong_hop_2026' %}" class="btn btn-primary">
-                <i class="fas fa-list-alt"></i> Tổng hợp 2026
-            </a>
+            <div class="stats-toolbar-group stats-toolbar-search">
+                {% include "payroll/components/search_form.html" %}
+            </div>
 
-            <div style="flex-grow:1;"></div>
-
-            {% include "payroll/components/search_form.html" %}
-
-            <a href="{% url 'payroll:payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
-               class="btn btn-primary">
-                <i class="fas fa-table"></i> Về bảng lương
-            </a>
+            <div class="stats-toolbar-group stats-toolbar-actions">
+                <a href="{% url 'payroll:tong_hop_2026' %}" class="btn btn-outline">
+                    <i class="fas fa-list-alt"></i> Tổng hợp 2026
+                </a>
+                <a href="{% url 'payroll:payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
+                   class="btn btn-primary">
+                    <i class="fas fa-table"></i> Bảng lương
+                </a>
+            </div>
         </div>
     </div>
 

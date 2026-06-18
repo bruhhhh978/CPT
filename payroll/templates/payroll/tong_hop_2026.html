@@ -56,17 +56,38 @@
 }
 .th-search input:focus { border-color: var(--primary); }
 .th-search i { position: absolute; left: .7rem; top: 50%; transform: translateY(-50%); color: var(--text-muted, #9ca3af); font-size: .8rem; }
+.th-filter-nghe {
+    padding: .45rem .8rem; border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px; font-size: .83rem; background: #fff;
+    color: var(--text-main, #111); outline: none; cursor: pointer;
+}
+.th-row-count {
+    padding: .45rem .8rem; border: 1px solid var(--border, #e5e7eb);
+    border-radius: 8px; background: #fff; font-size: .8rem;
+    color: var(--text-muted, #6b7280); white-space: nowrap;
+}
 
 .th-table-outer { position: relative; }
-.th-table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border, #e5e7eb); background: #fff; }
+.th-table-wrap {
+    --th-header-row-height: 34px;
+    max-height: calc(var(--th-header-row-height) * 2 + 12 * 42px + 48px);
+    overflow: auto; overscroll-behavior: contain;
+    border-radius: 12px; border: 1px solid var(--border, #e5e7eb); background: #fff;
+}
 .th-table { border-collapse: collapse; width: 100%; font-size: .82rem; min-width: 700px; }
 .th-table thead tr th {
+    position: sticky; top: 0; z-index: 50;
     background: #fff7ed; color: #7c2d12; font-weight: 700; font-size: .72rem;
     text-transform: uppercase; letter-spacing: .03em;
     padding: .65rem .6rem; white-space: nowrap;
+    box-shadow: 0 1px 0 var(--border, #e5e7eb);
     border-bottom: 2px solid #fed7aa; text-align: center;
 }
-.th-table thead tr:last-child th { font-size: .7rem; color: #7c2d12; padding: .3rem .5rem; border-bottom: 2px solid #fed7aa; background: #fff7ed; }
+.th-table thead tr:last-child th {
+    top: var(--th-header-row-height); z-index: 49;
+    font-size: .7rem; color: #7c2d12; padding: .3rem .5rem;
+    border-bottom: 2px solid #fed7aa; background: #fff7ed;
+}
 .th-table td { padding: .5rem .6rem; border-bottom: 1px solid var(--border, #f3f4f6); vertical-align: middle; text-align: center; white-space: nowrap; }
 .th-table td:nth-child(2) { text-align: left; font-weight: 600; }
 .th-table tbody tr:hover { background: #fff7ed; }
@@ -82,7 +103,12 @@
 .wk-val  { font-weight: 700; color: var(--primary, #f97316); }
 .wk-zero { color: #d1d5db; }
 
-.tong-row td { background: linear-gradient(90deg,#fff7ed,#ffedd5) !important; font-weight: 800; color: #7c2d12 !important; border-top: 2px solid #fed7aa !important; }
+.tong-row td {
+    position: sticky; bottom: 0; z-index: 45;
+    background: linear-gradient(90deg,#fff7ed,#ffedd5) !important;
+    font-weight: 800; color: #7c2d12 !important; border-top: 2px solid #fed7aa !important;
+    box-shadow: 0 -2px 0 #fed7aa, 0 -8px 18px rgba(15,23,42,.12);
+}
 td.luong-col { font-weight: 700; color: var(--primary, #f97316); text-align: right; padding-right: .8rem; }
 th.luong-col { text-align: right; padding-right: .8rem; }
 
@@ -110,16 +136,14 @@ th.luong-col { text-align: right; padding-right: .8rem; }
             <i class="fas fa-search"></i>
             <input type="text" id="search-input" placeholder="Tìm nhân viên..." oninput="filterTable()">
         </div>
-        <select id="filter-nghe" onchange="filterTable()"
-                style="padding:.45rem .8rem; border:1px solid var(--border,#e5e7eb); border-radius:8px;
-                       font-size:.83rem; background:var(--glass,#fff); color:var(--text-main,#111); outline:none; cursor:pointer;">
+        <select id="filter-nghe" class="th-filter-nghe" onchange="filterTable()">
             <option value="">Tất cả nghề</option>
             <option value="Cai">Cai</option>
             <option value="Thợ">Thợ</option>
             <option value="Phụ">Phụ</option>
             <option value="ĐN">ĐN</option>
         </select>
-        <span id="row-count" style="font-size:.8rem; color:var(--text-muted,#6b7280); white-space:nowrap;">
+        <span id="row-count" class="th-row-count">
             {{ so_nv }} nhân viên
         </span>
     </div>
@@ -145,5 +169,19 @@ function filterTable() {
     const totalRow = document.getElementById('total-row');
     if (totalRow) totalRow.style.display = (q || nghe) ? 'none' : '';
 }
+
+// Header height cho sticky row thứ 2
+(function () {
+    const wrap = document.querySelector('.th-table-wrap');
+    const hRow = document.querySelector('.th-table thead tr:first-child');
+    if (!wrap || !hRow) return;
+    function updateHeaderHeight() {
+        wrap.style.setProperty('--th-header-row-height', hRow.offsetHeight + 'px');
+    }
+    window.addEventListener('load', updateHeaderHeight);
+    window.addEventListener('resize', updateHeaderHeight);
+    updateHeaderHeight();
+    if ('ResizeObserver' in window) new ResizeObserver(updateHeaderHeight).observe(hRow);
+})();
 </script>
 {% endblock %}
