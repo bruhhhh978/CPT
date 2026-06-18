@@ -386,6 +386,249 @@ def build_weekly_payroll_data(employees, dates, du_an_id=None):
     return payroll_data
 
 
+def parse_year_month(value):
+    if not value:
+        today = timezone.now().date()
+        return today.year, today.month
+    try:
+        parsed = datetime.datetime.strptime(value, '%Y-%m').date()
+        return parsed.year, parsed.month
+    except ValueError:
+        today = timezone.now().date()
+        return today.year, today.month
+
+
+def month_end(year, month):
+    return datetime.date(year, month, calendar.monthrange(year, month)[1])
+
+
+def month_key(date_value):
+    return date_value.year, date_value.month
+
+
+def month_number(year, month):
+    return (year * 12) + month
+
+
+def add_months(date_value, months):
+    month_zero_based = date_value.month - 1 + months
+    year = date_value.year + (month_zero_based // 12)
+    month = (month_zero_based % 12) + 1
+    day = min(date_value.day, calendar.monthrange(year, month)[1])
+    return datetime.date(year, month, day)
+
+
+def iter_month_keys(start_year, start_month, end_year, end_month):
+    current = month_number(start_year, start_month)
+    end = month_number(end_year, end_month)
+    while current <= end:
+        year = (current - 1) // 12
+        month = ((current - 1) % 12) + 1
+        yield year, month
+        current += 1
+
+
+def format_duration(start_date, end_date):
+    if not start_date or start_date > end_date:
+        return '0 tháng'
+
+    total_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    if end_date.day < start_date.day:
+        total_months -= 1
+
+    total_months = max(total_months, 0)
+    anchor_date = add_months(start_date, total_months)
+    days = max((end_date - anchor_date).days, 0)
+    years = total_months // 12
+    months = total_months % 12
+
+    parts = []
+    if years:
+        parts.append(f'{years} năm')
+    if months:
+        parts.append(f'{months} tháng')
+    if days:
+        parts.append(f'{days} ngày')
+    return ' '.join(parts) if parts else '0 tháng'
+
+
+def build_seniority_rows(employees, attendance_map, as_of_date):
+    rows = []
+    as_of_month = month_key(as_of_date)
+
+    for emp in employees:
+        work_dates = sorted(attendance_map.get(emp.id, []))
+        if not work_dates:
+            rows.append({
+                'employee': emp,
+                'first_work_date': None,
+                'active_start_date': None,
+                'last_work_date': None,
+                'seniority_text': '0 tháng',
+                'worked_months': 0,
+                'absence_streak': 0,
+                'reset_count': 0,
+                'status': 'Chưa có công',
+                'status_class': 'muted',
+            })
+            continue
+
+        monthly_dates = {}
+        for work_date in work_dates:
+            if month_number(work_date.year, work_date.month) <= month_number(*as_of_month):
+                monthly_dates.setdefault(month_key(work_date), []).append(work_date)
+
+        if not monthly_dates:
+            rows.append({
+                'employee': emp,
+                'first_work_date': work_dates[0],
+                'active_start_date': None,
+                'last_work_date': None,
+                'seniority_text': '0 tháng',
+                'worked_months': 0,
+                'absence_streak': 0,
+                'reset_count': 0,
+                'status': 'Chưa tới kỳ',
+                'status_class': 'muted',
+            })
+            continue
+
+        first_month = min(monthly_dates.keys(), key=lambda item: month_number(*item))
+        active_start_date = min(monthly_dates[first_month])
+        first_work_date = active_start_date
+        last_work_date = active_start_date
+        absence_streak = 0
+        max_absence_streak = 0
+        reset_count = 0
+        worked_months = 0
+
+        for year, month in iter_month_keys(first_month[0], first_month[1], as_of_month[0], as_of_month[1]):
+            dates_in_month = monthly_dates.get((year, month), [])
+            if dates_in_month:
+                if absence_streak >= 2:
+                    active_start_date = min(dates_in_month)
+                    reset_count += 1
+                    worked_months = 0
+                absence_streak = 0
+                worked_months += 1
+                last_work_date = max(dates_in_month)
+            else:
+                absence_streak += 1
+                max_absence_streak = max(max_absence_streak, absence_streak)
+
+        if absence_streak >= 2:
+            seniority_text = '0 tháng'
+            status = 'Đã ngắt thâm niên'
+            status_class = 'danger'
+        elif absence_streak == 1:
+            seniority_text = format_duration(active_start_date, as_of_date)
+            status = 'Nghỉ 1 tháng'
+            status_class = 'warning'
+        else:
+            seniority_text = format_duration(active_start_date, as_of_date)
+            status = 'Đang tính'
+            status_class = 'success'
+
+        rows.append({
+            'employee': emp,
+            'first_work_date': first_work_date,
+            'active_start_date': active_start_date,
+            'last_work_date': last_work_date,
+            'seniority_text': seniority_text,
+            'worked_months': worked_months if absence_streak < 2 else 0,
+            'absence_streak': absence_streak,
+            'max_absence_streak': max_absence_streak,
+            'reset_count': reset_count,
+            'status': status,
+            'status_class': status_class,
+        })
+
+    return rows
+
+
+def seniority_table(request):
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    du_an_obj = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+        except (CongTrinh.DoesNotExist, ValueError):
+            du_an_id = ''
+
+    selected_year, selected_month = parse_year_month(request.GET.get('month'))
+    as_of_date = month_end(selected_year, selected_month)
+    today = timezone.now().date()
+    if as_of_date > today:
+        as_of_date = today
+        selected_year, selected_month = today.year, today.month
+
+    search_query = request.GET.get('q', '').strip()
+    summary_names = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+
+    employee_qs = Employee.objects.exclude(name__in=summary_names).order_by('name')
+    if du_an_id:
+        emp_ids_in_project = Attendance.objects.filter(
+            cong_trinh_id=du_an_id
+        ).values_list('employee_id', flat=True).distinct()
+        employee_qs = employee_qs.filter(id__in=emp_ids_in_project)
+    if search_query:
+        employee_qs = employee_qs.filter(name__icontains=search_query)
+
+    employees = list(employee_qs)
+    attendance_qs = Attendance.objects.filter(
+        Q(regular_workday__gt=0) | Q(overtime_workday__gt=0),
+        date__lte=as_of_date,
+        employee_id__in=[emp.id for emp in employees],
+    ).order_by('date')
+    if du_an_id:
+        attendance_qs = attendance_qs.filter(cong_trinh_id=du_an_id)
+
+    attendance_map = {}
+    for att in attendance_qs:
+        attendance_map.setdefault(att.employee_id, []).append(att.date)
+
+    seniority_rows = build_seniority_rows(employees, attendance_map, as_of_date)
+
+    available_months = set(get_available_months(du_an_id=du_an_id))
+    available_months.add((today.year, today.month))
+    for date_value in attendance_qs.values_list('date', flat=True).distinct():
+        available_months.add((date_value.year, date_value.month))
+
+    month_options = [
+        {
+            'value': f'{year}-{month:02d}',
+            'label': f'Tháng {month:02d}/{year}',
+            'selected': year == selected_year and month == selected_month,
+        }
+        for year, month in sorted(available_months)
+        if month_number(year, month) <= month_number(today.year, today.month)
+    ]
+
+    projects = CongTrinh.objects.all().order_by('ten_cong_trinh')
+    total_active = sum(1 for row in seniority_rows if row['status_class'] == 'success')
+    total_warning = sum(1 for row in seniority_rows if row['status_class'] == 'warning')
+    total_reset = sum(1 for row in seniority_rows if row['status_class'] == 'danger')
+
+    context = {
+        'seniority_rows': seniority_rows,
+        'month_options': month_options,
+        'selected_month': f'{selected_year}-{selected_month:02d}',
+        'as_of_date': as_of_date,
+        'projects': projects,
+        'du_an_id': du_an_id,
+        'du_an_obj': du_an_obj,
+        'search_query': search_query,
+        'total_workers': len(seniority_rows),
+        'total_active': total_active,
+        'total_warning': total_warning,
+        'total_reset': total_reset,
+    }
+    return render(request, 'payroll/seniority_table.html', context)
+
+
 def payroll_sheet(request, pk=None):
     du_an_id = pk or request.GET.get('du_an_id') or ''
     du_an_id = str(du_an_id).strip() if du_an_id else ''

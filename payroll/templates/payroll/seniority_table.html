@@ -1,0 +1,282 @@
+{% extends 'payroll/base.html' %}
+
+{% block title %}Bảng thâm niên - CPT{% endblock %}
+
+{% block extra_head %}
+<style>
+.seniority-shell {
+    display: grid;
+    gap: 1rem;
+}
+
+.seniority-controls {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: nowrap;
+    margin-bottom: 0;
+}
+
+.seniority-controls select,
+.seniority-controls input {
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    background: #fff;
+    color: var(--text-main);
+    font-size: .85rem;
+    font-weight: 600;
+    outline: none;
+}
+
+.seniority-controls select {
+    min-width: 190px;
+    padding: 0 .65rem;
+}
+
+.seniority-controls input {
+    min-width: 230px;
+    padding: 0 .8rem;
+}
+
+.seniority-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(160px, 1fr));
+    gap: .85rem;
+}
+
+.seniority-stat {
+    background: rgba(255,255,255,.9);
+    border: 1px solid var(--border);
+    border-radius: .75rem;
+    padding: 1rem;
+}
+
+.seniority-stat span {
+    display: block;
+    color: var(--text-muted);
+    font-size: .8rem;
+    margin-bottom: .4rem;
+}
+
+.seniority-stat strong {
+    font-size: 1.6rem;
+    color: var(--text-main);
+}
+
+.seniority-table-container {
+    max-height: 68vh;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    background: #fff;
+    scrollbar-width: auto !important;
+}
+
+.seniority-table-container::-webkit-scrollbar {
+    display: block !important;
+    width: 9px;
+    height: 9px;
+}
+
+.seniority-table-container::-webkit-scrollbar-track {
+    background: #f3f4f6;
+}
+
+.seniority-table-container::-webkit-scrollbar-thumb {
+    background: #fdba74;
+    border-radius: 6px;
+}
+
+.seniority-table {
+    margin-top: 0 !important;
+}
+
+.seniority-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #fff7ed;
+    color: #7c2d12;
+    border-bottom: 2px solid #fed7aa !important;
+    text-align: center;
+}
+
+.seniority-table td {
+    text-align: center;
+}
+
+.seniority-table .name-cell {
+    text-align: left;
+    font-weight: 700;
+    min-width: 180px;
+}
+
+.seniority-table .date-cell {
+    min-width: 105px;
+}
+
+.seniority-table .duration-cell {
+    min-width: 160px;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+    min-height: 26px;
+    padding: .25rem .6rem;
+    border-radius: 999px;
+    font-size: .76rem;
+    font-weight: 800;
+}
+
+.status-success {
+    background: rgba(16,185,129,.12);
+    color: #047857;
+}
+
+.status-warning {
+    background: rgba(245,158,11,.14);
+    color: #92400e;
+}
+
+.status-danger {
+    background: rgba(239,68,68,.12);
+    color: #b91c1c;
+}
+
+.status-muted {
+    background: rgba(100,116,139,.12);
+    color: #475569;
+}
+
+.scope-banner {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    background: rgba(249,115,22,.08);
+    border: 1px solid rgba(249,115,22,.28);
+    border-radius: .65rem;
+    padding: .7rem .9rem;
+    color: var(--text-main);
+    font-size: .9rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="seniority-shell">
+    <div class="card">
+        <form method="GET" class="seniority-controls">
+            <select name="month" onchange="this.form.submit()">
+                {% for option in month_options %}
+                <option value="{{ option.value }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+
+            <select name="du_an_id" onchange="this.form.submit()">
+                <option value="">Tất cả công trình</option>
+                {% for project in projects %}
+                <option value="{{ project.id }}" {% if du_an_id|stringformat:'s' == project.id|stringformat:'s' %}selected{% endif %}>
+                    {{ project.ten_cong_trinh }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên">
+            <button type="submit" class="btn btn-outline"><i class="fas fa-search"></i> Tìm</button>
+            {% if search_query or du_an_id %}
+            <a class="btn btn-outline" href="{% url 'payroll:seniority_table' %}?month={{ selected_month }}">Xóa lọc</a>
+            {% endif %}
+
+            <div style="flex:1;"></div>
+            <a href="{% url 'payroll:payroll_sheet' %}" class="btn btn-primary">
+                <i class="fas fa-table"></i> Bảng lương
+            </a>
+        </form>
+    </div>
+
+    {% if du_an_obj %}
+    <div class="scope-banner">
+        <i class="fas fa-hard-hat" style="color:var(--primary);"></i>
+        <strong>Công trình:</strong>
+        <span>{{ du_an_obj.ten_cong_trinh }}</span>
+    </div>
+    {% endif %}
+
+    <div class="seniority-stats">
+        <div class="seniority-stat">
+            <span>Tổng công nhân</span>
+            <strong>{{ total_workers }}</strong>
+        </div>
+        <div class="seniority-stat">
+            <span>Đang tính thâm niên</span>
+            <strong>{{ total_active }}</strong>
+        </div>
+        <div class="seniority-stat">
+            <span>Nghỉ 1 tháng</span>
+            <strong>{{ total_warning }}</strong>
+        </div>
+        <div class="seniority-stat">
+            <span>Đã ngắt thâm niên</span>
+            <strong>{{ total_reset }}</strong>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="section-heading">
+            <div>
+                <h3>Bảng thâm niên đến {{ as_of_date|date:'d/m/Y' }}</h3>
+                <p>Nghỉ 2 tháng liên tiếp thì thâm niên hiện tại về 0 và sẽ tính lại từ ngày đi làm tiếp theo.</p>
+            </div>
+        </div>
+
+        <div class="table-container seniority-table-container">
+            <table class="seniority-table">
+                <thead>
+                    <tr>
+                        <th>STT</th>
+                        <th>Họ tên</th>
+                        <th>Nghề</th>
+                        <th>Ngày làm đầu</th>
+                        <th>Mốc tính hiện tại</th>
+                        <th>Lần làm gần nhất</th>
+                        <th>Thâm niên hiện tại</th>
+                        <th>Tháng có công</th>
+                        <th>Nghỉ liên tiếp</th>
+                        <th>Số lần tính lại</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in seniority_rows %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td class="name-cell">{{ row.employee.name }}</td>
+                        <td>{{ row.employee.position }}</td>
+                        <td class="date-cell">{% if row.first_work_date %}{{ row.first_work_date|date:'d/m/Y' }}{% else %}-{% endif %}</td>
+                        <td class="date-cell">{% if row.active_start_date and row.status_class != 'danger' %}{{ row.active_start_date|date:'d/m/Y' }}{% else %}-{% endif %}</td>
+                        <td class="date-cell">{% if row.last_work_date %}{{ row.last_work_date|date:'d/m/Y' }}{% else %}-{% endif %}</td>
+                        <td class="duration-cell">{{ row.seniority_text }}</td>
+                        <td>{{ row.worked_months }}</td>
+                        <td>{{ row.absence_streak }}</td>
+                        <td>{{ row.reset_count }}</td>
+                        <td>
+                            <span class="status-pill status-{{ row.status_class }}">{{ row.status }}</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="empty-state-cell">Không có dữ liệu.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

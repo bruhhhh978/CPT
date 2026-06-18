@@ -8,6 +8,7 @@ urlpatterns = [
     # Hỗ trợ gõ Sheet/ có chữ hoa
     path('Sheet/', views.payroll_sheet),
     path('statistics/', views.payroll_statistics, name='payroll_statistics'),
+    path('seniority/', views.seniority_table, name='seniority_table'),
     path('add-employee/', views.add_employee, name='add_employee'),
     path('edit-employee/<int:pk>/', views.edit_employee, name='edit_employee'),
     path('delete-employee/<int:pk>/', views.delete_employee, name='delete_employee'),
