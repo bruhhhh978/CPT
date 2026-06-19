@@ -692,6 +692,7 @@ def get_tet_new_worker_bonus(position_key, worked_months, settings_map):
     return 0
 
 
+@login_required(login_url='login:login')
 @allow_viewer
 def tet_bonus_2025(request):
     selected_year = parse_tet_bonus_year(request.POST.get('year') if request.method == 'POST' else request.GET.get('year'))
@@ -862,6 +863,7 @@ def tet_bonus_2025(request):
     return render(request, 'payroll/tet_bonus_2025.html', context)
 
 
+@login_required(login_url='login:login')
 def seniority_table(request):
     du_an_id = request.GET.get('du_an_id', '').strip()
     du_an_obj = None
