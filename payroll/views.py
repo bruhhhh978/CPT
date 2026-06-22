@@ -510,6 +510,7 @@ def build_seniority_rows(employees, attendance_map, as_of_date):
                     active_start_date = min(dates_in_month)
                     reset_count += 1
                     worked_months = 0
+                    first_work_date = active_start_date
                 absence_streak = 0
                 worked_months += 1
                 last_work_date = max(dates_in_month)
@@ -863,7 +864,6 @@ def tet_bonus_2025(request):
     return render(request, 'payroll/tet_bonus_2025.html', context)
 
 
-@login_required(login_url='login:login')
 def seniority_table(request):
     du_an_id = request.GET.get('du_an_id', '').strip()
     du_an_obj = None
