@@ -192,11 +192,6 @@
             {% if search_query or du_an_id %}
             <a class="btn btn-outline" href="{% url 'payroll:seniority_table' %}?month={{ selected_month }}">Xóa lọc</a>
             {% endif %}
-
-            <div style="flex:1;"></div>
-            <a href="{% url 'payroll:payroll_sheet' %}" class="btn btn-primary">
-                <i class="fas fa-table"></i> Bảng lương
-            </a>
         </form>
     </div>
 
