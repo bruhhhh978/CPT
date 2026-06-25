@@ -352,3 +352,19 @@ class ChotLuongThang(models.Model):
 
     def __str__(self):
         return f"{self.nhan_vien.ho_ten} - {self.thang_nam} ({self.trang_thai})"
+
+
+class TetBonusSetting(models.Model):
+    key = models.CharField(max_length=80, unique=True, verbose_name="Mã cấu hình")
+    label = models.CharField(max_length=160, verbose_name="Tên mức thưởng")
+    amount = models.PositiveIntegerField(default=0, verbose_name="Số tiền")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Cập nhật lúc")
+
+    class Meta:
+        db_table = 'tet_bonus_setting'
+        verbose_name = "Cấu hình thưởng Tết"
+        verbose_name_plural = "Cấu hình thưởng Tết"
+        ordering = ['key']
+
+    def __str__(self):
+        return f"{self.label}: {self.amount:,.0f} đ"

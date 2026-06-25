@@ -1,12 +1,13 @@
 import calendar
 import datetime
 from urllib import request
+from urllib.parse import urlencode
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.db.models import Sum, Q, Count
-from .models import Employee, Attendance, Adjustment, AdjustmentLog, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang
+from .models import Employee, Attendance, Adjustment, AdjustmentLog, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang, TetBonusSetting
 from decimal import Decimal
 import pandas as pd
 from django.db import transaction
@@ -385,6 +386,567 @@ def build_weekly_payroll_data(employees, dates, du_an_id=None):
             'total_pay': total_pay
         })
     return payroll_data
+
+
+def parse_year_month(value):
+    if not value:
+        today = timezone.now().date()
+        return today.year, today.month
+    try:
+        parsed = datetime.datetime.strptime(value, '%Y-%m').date()
+        return parsed.year, parsed.month
+    except ValueError:
+        today = timezone.now().date()
+        return today.year, today.month
+
+
+def month_end(year, month):
+    return datetime.date(year, month, calendar.monthrange(year, month)[1])
+
+
+def month_key(date_value):
+    return date_value.year, date_value.month
+
+
+def month_number(year, month):
+    return (year * 12) + month
+
+
+def add_months(date_value, months):
+    month_zero_based = date_value.month - 1 + months
+    year = date_value.year + (month_zero_based // 12)
+    month = (month_zero_based % 12) + 1
+    day = min(date_value.day, calendar.monthrange(year, month)[1])
+    return datetime.date(year, month, day)
+
+
+def iter_month_keys(start_year, start_month, end_year, end_month):
+    current = month_number(start_year, start_month)
+    end = month_number(end_year, end_month)
+    while current <= end:
+        year = (current - 1) // 12
+        month = ((current - 1) % 12) + 1
+        yield year, month
+        current += 1
+
+
+def format_duration(start_date, end_date):
+    if not start_date or start_date > end_date:
+        return '0 tháng'
+
+    total_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    if end_date.day < start_date.day:
+        total_months -= 1
+
+    total_months = max(total_months, 0)
+    anchor_date = add_months(start_date, total_months)
+    days = max((end_date - anchor_date).days, 0)
+    years = total_months // 12
+    months = total_months % 12
+
+    parts = []
+    if years:
+        parts.append(f'{years} năm')
+    if months:
+        parts.append(f'{months} tháng')
+    if days:
+        parts.append(f'{days} ngày')
+    return ' '.join(parts) if parts else '0 tháng'
+
+
+def build_seniority_rows(employees, attendance_map, as_of_date):
+    rows = []
+    as_of_month = month_key(as_of_date)
+
+    for emp in employees:
+        work_dates = sorted(attendance_map.get(emp.id, []))
+        if not work_dates:
+            rows.append({
+                'employee': emp,
+                'first_work_date': None,
+                'active_start_date': None,
+                'last_work_date': None,
+                'seniority_text': '0 tháng',
+                'worked_months': 0,
+                'absence_streak': 0,
+                'reset_count': 0,
+                'status': 'Chưa có công',
+                'status_class': 'muted',
+            })
+            continue
+
+        monthly_dates = {}
+        for work_date in work_dates:
+            if month_number(work_date.year, work_date.month) <= month_number(*as_of_month):
+                monthly_dates.setdefault(month_key(work_date), []).append(work_date)
+
+        if not monthly_dates:
+            rows.append({
+                'employee': emp,
+                'first_work_date': work_dates[0],
+                'active_start_date': None,
+                'last_work_date': None,
+                'seniority_text': '0 tháng',
+                'worked_months': 0,
+                'absence_streak': 0,
+                'reset_count': 0,
+                'status': 'Chưa tới kỳ',
+                'status_class': 'muted',
+            })
+            continue
+
+        first_month = min(monthly_dates.keys(), key=lambda item: month_number(*item))
+        active_start_date = min(monthly_dates[first_month])
+        first_work_date = active_start_date
+        last_work_date = active_start_date
+        absence_streak = 0
+        max_absence_streak = 0
+        reset_count = 0
+        worked_months = 0
+
+        for year, month in iter_month_keys(first_month[0], first_month[1], as_of_month[0], as_of_month[1]):
+            dates_in_month = monthly_dates.get((year, month), [])
+            if dates_in_month:
+                if absence_streak >= 2:
+                    active_start_date = min(dates_in_month)
+                    reset_count += 1
+                    worked_months = 0
+                    first_work_date = active_start_date
+                absence_streak = 0
+                worked_months += 1
+                last_work_date = max(dates_in_month)
+            else:
+                absence_streak += 1
+                max_absence_streak = max(max_absence_streak, absence_streak)
+
+        if absence_streak >= 2:
+            seniority_text = '0 tháng'
+            status = 'Đã ngắt thâm niên'
+            status_class = 'danger'
+        elif absence_streak == 1:
+            seniority_text = format_duration(active_start_date, as_of_date)
+            status = 'Nghỉ 1 tháng'
+            status_class = 'warning'
+        else:
+            seniority_text = format_duration(active_start_date, as_of_date)
+            status = 'Đang tính'
+            status_class = 'success'
+
+        rows.append({
+            'employee': emp,
+            'first_work_date': first_work_date,
+            'active_start_date': active_start_date,
+            'last_work_date': last_work_date,
+            'seniority_text': seniority_text,
+            'worked_months': worked_months if absence_streak < 2 else 0,
+            'absence_streak': absence_streak,
+            'max_absence_streak': max_absence_streak,
+            'reset_count': reset_count,
+            'status': status,
+            'status_class': status_class,
+        })
+
+    return rows
+
+
+TET_BONUS_DEFAULT_YEAR = 2025
+TET_BONUS_MONTHLY_RATES = {
+    'tho': 100000,
+    'phu': 70000,
+}
+TET_BONUS_NEW_WORKER_TIERS = {
+    'tho': [
+        (6, 600000),
+        (4, 400000),
+        (2, 300000),
+        (0, 200000),
+    ],
+    'phu': [
+        (6, 400000),
+        (4, 300000),
+        (2, 250000),
+        (0, 150000),
+    ],
+}
+TET_BONUS_SENIORITY_TIERS = [
+    (84, 2500000, 'Từ 7 năm trở lên'),
+    (72, 2000000, 'Từ 6 đến dưới 7 năm'),
+    (60, 1500000, 'Từ 5 đến dưới 6 năm'),
+    (48, 1000000, 'Từ 4 đến dưới 5 năm'),
+    (36, 700000, 'Từ 3 đến dưới 4 năm'),
+    (24, 500000, 'Từ 2 đến dưới 3 năm'),
+    (12, 200000, 'Từ 1 đến dưới 2 năm'),
+]
+TET_BONUS_SETTING_DEFS = [
+    {'key': 'old_tho_monthly', 'label': 'Công nhân cũ - Thợ / tháng', 'default': 100000, 'group': 'Công nhân cũ'},
+    {'key': 'old_phu_monthly', 'label': 'Công nhân cũ - Phụ / tháng', 'default': 70000, 'group': 'Công nhân cũ'},
+    {'key': 'seniority_12', 'label': 'Thâm niên từ 1 đến dưới 2 năm', 'default': 200000, 'group': 'Thâm niên'},
+    {'key': 'seniority_24', 'label': 'Thâm niên từ 2 đến dưới 3 năm', 'default': 500000, 'group': 'Thâm niên'},
+    {'key': 'seniority_36', 'label': 'Thâm niên từ 3 đến dưới 4 năm', 'default': 700000, 'group': 'Thâm niên'},
+    {'key': 'seniority_48', 'label': 'Thâm niên từ 4 đến dưới 5 năm', 'default': 1000000, 'group': 'Thâm niên'},
+    {'key': 'seniority_60', 'label': 'Thâm niên từ 5 đến dưới 6 năm', 'default': 1500000, 'group': 'Thâm niên'},
+    {'key': 'seniority_72', 'label': 'Thâm niên từ 6 đến dưới 7 năm', 'default': 2000000, 'group': 'Thâm niên'},
+    {'key': 'seniority_84', 'label': 'Thâm niên từ 7 năm trở lên', 'default': 2500000, 'group': 'Thâm niên'},
+    {'key': 'new_tho_6', 'label': 'Công nhân mới - Thợ từ 6 tháng', 'default': 600000, 'group': 'CN mới - Thợ'},
+    {'key': 'new_tho_4', 'label': 'Công nhân mới - Thợ từ 4 đến dưới 6 tháng', 'default': 400000, 'group': 'CN mới - Thợ'},
+    {'key': 'new_tho_2', 'label': 'Công nhân mới - Thợ từ 2 đến dưới 4 tháng', 'default': 300000, 'group': 'CN mới - Thợ'},
+    {'key': 'new_tho_0', 'label': 'Công nhân mới - Thợ dưới 2 tháng', 'default': 200000, 'group': 'CN mới - Thợ'},
+    {'key': 'new_phu_6', 'label': 'Công nhân mới - Phụ từ 6 tháng', 'default': 400000, 'group': 'CN mới - Phụ'},
+    {'key': 'new_phu_4', 'label': 'Công nhân mới - Phụ từ 4 đến dưới 6 tháng', 'default': 300000, 'group': 'CN mới - Phụ'},
+    {'key': 'new_phu_2', 'label': 'Công nhân mới - Phụ từ 2 đến dưới 4 tháng', 'default': 250000, 'group': 'CN mới - Phụ'},
+    {'key': 'new_phu_0', 'label': 'Công nhân mới - Phụ dưới 2 tháng', 'default': 150000, 'group': 'CN mới - Phụ'},
+]
+
+
+def get_tet_bonus_settings():
+    defaults = {item['key']: item['default'] for item in TET_BONUS_SETTING_DEFS}
+    saved_settings = TetBonusSetting.objects.filter(key__in=defaults.keys())
+    for setting in saved_settings:
+        defaults[setting.key] = setting.amount
+    return defaults
+
+
+def build_tet_bonus_setting_groups(settings_map):
+    groups = []
+    group_map = {}
+    for item in TET_BONUS_SETTING_DEFS:
+        group = group_map.setdefault(item['group'], {'name': item['group'], 'items': []})
+        if group not in groups:
+            groups.append(group)
+        group['items'].append({
+            'key': item['key'],
+            'label': item['label'],
+            'amount': settings_map.get(item['key'], item['default']),
+        })
+    return groups
+
+
+def parse_money_input(value):
+    normalized = str(value or '').replace('.', '').replace(',', '').replace(' ', '').strip()
+    if not normalized:
+        return 0
+    return max(int(normalized), 0)
+
+
+def parse_tet_bonus_year(value):
+    try:
+        year = int(str(value or '').strip())
+    except (TypeError, ValueError):
+        return TET_BONUS_DEFAULT_YEAR
+
+    current_year = timezone.now().date().year
+    if year < 2000 or year > current_year:
+        return TET_BONUS_DEFAULT_YEAR
+    return year
+
+
+def get_tet_bonus_year_options(selected_year):
+    years = set(
+        Attendance.objects.exclude(date__isnull=True)
+        .values_list('date__year', flat=True)
+        .distinct()
+    )
+    years.add(TET_BONUS_DEFAULT_YEAR)
+    years.add(selected_year)
+    years.add(timezone.now().date().year)
+    return [
+        {
+            'value': str(year),
+            'label': f'Năm {year}',
+            'selected': year == selected_year,
+        }
+        for year in sorted(years, reverse=True)
+    ]
+
+
+def normalize_tet_position(position):
+    normalized = (position or '').strip().lower()
+    if normalized in ('tho', 'thợ'):
+        return 'tho'
+    if normalized in ('phu', 'phụ'):
+        return 'phu'
+    return normalized
+
+
+def completed_months_between(start_date, end_date):
+    if not start_date or start_date > end_date:
+        return 0
+    total_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    if end_date.day < start_date.day:
+        total_months -= 1
+    return max(total_months, 0)
+
+
+def get_tet_seniority_bonus(seniority_months, settings_map):
+    for minimum_months, default_amount, label in TET_BONUS_SENIORITY_TIERS:
+        amount = settings_map.get(f'seniority_{minimum_months}', default_amount)
+        if seniority_months >= minimum_months:
+            return amount, label
+    return 0, 'Dưới 1 năm'
+
+
+def get_tet_new_worker_bonus(position_key, worked_months, settings_map):
+    tiers = TET_BONUS_NEW_WORKER_TIERS.get(position_key, [])
+    for minimum_months, default_amount in tiers:
+        if worked_months >= minimum_months:
+            amount = settings_map.get(f'new_{position_key}_{minimum_months}', default_amount)
+            return amount
+    return 0
+
+
+@login_required(login_url='login:login')
+@allow_viewer
+def tet_bonus_2025(request):
+    selected_year = parse_tet_bonus_year(request.POST.get('year') if request.method == 'POST' else request.GET.get('year'))
+
+    if request.method == 'POST':
+        try:
+            is_manager = request.user.is_authenticated and request.user.profile.role == 'manager'
+        except Exception:
+            is_manager = False
+        if not is_manager:
+            messages.error(request, 'Chỉ người dùng cấp 1 mới được chỉnh sửa mức thưởng Tết.')
+            return redirect('payroll:tet_bonus_2025')
+
+        saved_count = 0
+        for item in TET_BONUS_SETTING_DEFS:
+            try:
+                amount = parse_money_input(request.POST.get(item['key'], item['default']))
+            except ValueError:
+                messages.error(request, f"Mức thưởng '{item['label']}' không hợp lệ.")
+                return redirect('payroll:tet_bonus_2025')
+            TetBonusSetting.objects.update_or_create(
+                key=item['key'],
+                defaults={'label': item['label'], 'amount': amount},
+            )
+            saved_count += 1
+
+        log_activity(
+            request,
+            'UPDATE',
+            'ThuongTet',
+            object_repr=f'Chinh sach {selected_year}',
+            description=f'Cập nhật {saved_count} mức thưởng Tết {selected_year}',
+        )
+        messages.success(request, 'Đã cập nhật mức thưởng Tết thành công.')
+        redirect_url = reverse('payroll:tet_bonus_2025')
+        query_parts = [urlencode({'year': selected_year})]
+        du_an_id_post = request.POST.get('du_an_id', '').strip()
+        search_query_post = request.POST.get('q', '').strip()
+        if du_an_id_post:
+            query_parts.append(f'du_an_id={du_an_id_post}')
+        if search_query_post:
+            query_parts.append(urlencode({'q': search_query_post}))
+        if query_parts:
+            redirect_url += '?' + '&'.join(query_parts)
+        return redirect(redirect_url)
+
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    du_an_obj = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+        except (CongTrinh.DoesNotExist, ValueError):
+            du_an_id = ''
+
+    search_query = request.GET.get('q', '').strip()
+    year_start = datetime.date(selected_year, 1, 1)
+    year_end = datetime.date(selected_year, 12, 31)
+    as_of_date = min(year_end, timezone.now().date())
+    bonus_settings = get_tet_bonus_settings()
+    summary_names = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+
+    employee_qs = Employee.objects.exclude(name__in=summary_names).order_by('name')
+    if du_an_id:
+        emp_ids_in_project = Attendance.objects.filter(
+            cong_trinh_id=du_an_id
+        ).values_list('employee_id', flat=True).distinct()
+        employee_qs = employee_qs.filter(id__in=emp_ids_in_project)
+    if search_query:
+        employee_qs = employee_qs.filter(name__icontains=search_query)
+
+    employees = list(employee_qs)
+    employee_ids = [emp.id for emp in employees]
+    attendance_qs = Attendance.objects.filter(
+        Q(regular_workday__gt=0) | Q(overtime_workday__gt=0),
+        date__lte=as_of_date,
+        employee_id__in=employee_ids,
+    ).order_by('date')
+    if du_an_id:
+        attendance_qs = attendance_qs.filter(cong_trinh_id=du_an_id)
+
+    attendance_map = {}
+    worked_month_map = {}
+    for att in attendance_qs:
+        attendance_map.setdefault(att.employee_id, []).append(att.date)
+        if year_start <= att.date <= year_end:
+            worked_month_map.setdefault(att.employee_id, set()).add((att.date.year, att.date.month))
+
+    seniority_rows = build_seniority_rows(employees, attendance_map, as_of_date)
+    bonus_rows = []
+    total_bonus = 0
+    old_worker_count = 0
+    new_worker_count = 0
+
+    for seniority_row in seniority_rows:
+        emp = seniority_row['employee']
+        position_key = normalize_tet_position(emp.position)
+        worked_months = len(worked_month_map.get(emp.id, set()))
+        seniority_months = completed_months_between(seniority_row.get('active_start_date'), as_of_date)
+        if seniority_row.get('status_class') == 'danger':
+            seniority_months = 0
+
+        monthly_rate = bonus_settings.get(f'old_{position_key}_monthly', TET_BONUS_MONTHLY_RATES.get(position_key, 0))
+        monthly_bonus = worked_months * monthly_rate
+        seniority_bonus, seniority_tier = get_tet_seniority_bonus(seniority_months, bonus_settings)
+        has_seniority = seniority_months >= 12
+
+        if has_seniority:
+            worker_type = 'Cũ có thâm niên'
+            policy_bonus = monthly_bonus + seniority_bonus
+            new_worker_bonus = 0
+            old_worker_count += 1
+        else:
+            worker_type = 'Mới chưa có thâm niên'
+            new_worker_bonus = get_tet_new_worker_bonus(position_key, worked_months, bonus_settings)
+            policy_bonus = new_worker_bonus
+            new_worker_count += 1
+
+        total_bonus += policy_bonus
+        new_bonus_tiers = TET_BONUS_NEW_WORKER_TIERS.get(position_key, [])
+        bonus_rows.append({
+            'employee': emp,
+            'worker_type': worker_type,
+            'position_key': position_key,
+            'worked_months': worked_months,
+            'monthly_rate': monthly_rate,
+            'monthly_bonus': monthly_bonus,
+            'seniority_text': seniority_row.get('seniority_text', '0 tháng'),
+            'seniority_months': seniority_months,
+            'seniority_tier': seniority_tier,
+            'seniority_bonus': seniority_bonus if has_seniority else 0,
+            'new_worker_bonus': new_worker_bonus,
+            'new_worker_tier': next(
+                (f'Từ {minimum} tháng' if minimum else 'Dưới 2 tháng' for minimum, _ in new_bonus_tiers if worked_months >= minimum),
+                '-'
+            ),
+            'total_bonus': policy_bonus,
+            'status': seniority_row.get('status', ''),
+            'status_class': seniority_row.get('status_class', 'muted'),
+        })
+
+    projects = CongTrinh.objects.all().order_by('ten_cong_trinh')
+    can_edit_bonus = False
+    try:
+        can_edit_bonus = request.user.is_authenticated and request.user.profile.role == 'manager'
+    except Exception:
+        can_edit_bonus = False
+    context = {
+        'bonus_rows': bonus_rows,
+        'projects': projects,
+        'du_an_id': du_an_id,
+        'du_an_obj': du_an_obj,
+        'search_query': search_query,
+        'bonus_year': str(selected_year),
+        'selected_year': selected_year,
+        'as_of_date': as_of_date,
+        'year_options': get_tet_bonus_year_options(selected_year),
+        'total_workers': len(bonus_rows),
+        'old_worker_count': old_worker_count,
+        'new_worker_count': new_worker_count,
+        'total_bonus': total_bonus,
+        'can_edit_bonus': can_edit_bonus,
+        'bonus_setting_groups': build_tet_bonus_setting_groups(bonus_settings),
+        'bonus_settings': bonus_settings,
+    }
+    return render(request, 'payroll/tet_bonus_2025.html', context)
+
+
+@login_required(login_url='login:login')
+def seniority_table(request):
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    du_an_obj = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+        except (CongTrinh.DoesNotExist, ValueError):
+            du_an_id = ''
+
+    selected_year, selected_month = parse_year_month(request.GET.get('month'))
+    as_of_date = month_end(selected_year, selected_month)
+    today = timezone.now().date()
+    if as_of_date > today:
+        as_of_date = today
+        selected_year, selected_month = today.year, today.month
+
+    search_query = request.GET.get('q', '').strip()
+    summary_names = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+
+    employee_qs = Employee.objects.exclude(name__in=summary_names).order_by('name')
+    if du_an_id:
+        emp_ids_in_project = Attendance.objects.filter(
+            cong_trinh_id=du_an_id
+        ).values_list('employee_id', flat=True).distinct()
+        employee_qs = employee_qs.filter(id__in=emp_ids_in_project)
+    if search_query:
+        employee_qs = employee_qs.filter(name__icontains=search_query)
+
+    employees = list(employee_qs)
+    attendance_qs = Attendance.objects.filter(
+        Q(regular_workday__gt=0) | Q(overtime_workday__gt=0),
+        date__lte=as_of_date,
+        employee_id__in=[emp.id for emp in employees],
+    ).order_by('date')
+    if du_an_id:
+        attendance_qs = attendance_qs.filter(cong_trinh_id=du_an_id)
+
+    attendance_map = {}
+    for att in attendance_qs:
+        attendance_map.setdefault(att.employee_id, []).append(att.date)
+
+    seniority_rows = build_seniority_rows(employees, attendance_map, as_of_date)
+
+    available_months = set(get_available_months(du_an_id=du_an_id))
+    available_months.add((today.year, today.month))
+    for date_value in attendance_qs.values_list('date', flat=True).distinct():
+        available_months.add((date_value.year, date_value.month))
+
+    month_options = [
+        {
+            'value': f'{year}-{month:02d}',
+            'label': f'Tháng {month:02d}/{year}',
+            'selected': year == selected_year and month == selected_month,
+        }
+        for year, month in sorted(available_months)
+        if month_number(year, month) <= month_number(today.year, today.month)
+    ]
+
+    projects = CongTrinh.objects.all().order_by('ten_cong_trinh')
+    total_active = sum(1 for row in seniority_rows if row['status_class'] == 'success')
+    total_warning = sum(1 for row in seniority_rows if row['status_class'] == 'warning')
+    total_reset = sum(1 for row in seniority_rows if row['status_class'] == 'danger')
+
+    context = {
+        'seniority_rows': seniority_rows,
+        'month_options': month_options,
+        'selected_month': f'{selected_year}-{selected_month:02d}',
+        'as_of_date': as_of_date,
+        'projects': projects,
+        'du_an_id': du_an_id,
+        'du_an_obj': du_an_obj,
+        'search_query': search_query,
+        'total_workers': len(seniority_rows),
+        'total_active': total_active,
+        'total_warning': total_warning,
+        'total_reset': total_reset,
+    }
+    return render(request, 'payroll/seniority_table.html', context)
 
 
 def payroll_sheet(request, pk=None):
@@ -1452,6 +2014,7 @@ def api_online_users(request):
  
     return JsonResponse({'users': data, 'count': len(data)})
  
+<<<<<<< HEAD
 
 # --- Thống kê chi tiêu tổng hợp theo dự án, tháng, năm ---
 @allow_viewer
@@ -1804,3 +2367,5 @@ def chi_tieu_export_excel(request):
 
     wb.save(response)
     return response
+=======
+>>>>>>> e2a5fda4d7649e45576d59307af8ec2c3e14a371
