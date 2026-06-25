@@ -864,6 +864,7 @@ def tet_bonus_2025(request):
     return render(request, 'payroll/tet_bonus_2025.html', context)
 
 
+@login_required(login_url='login:login')
 def seniority_table(request):
     du_an_id = request.GET.get('du_an_id', '').strip()
     du_an_obj = None
