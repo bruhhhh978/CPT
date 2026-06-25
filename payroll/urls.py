@@ -37,4 +37,6 @@ urlpatterns = [
     path('manager/user-tracking/', views.user_tracking_dashboard, name='user_tracking_dashboard'),
     path('manager/user-tracking/<int:user_id>/', views.user_tracking_detail, name='user_tracking_detail'),
     path('api/online-users/', views.api_online_users, name='api_online_users'),
+    path('chi-tieu/', views.chi_tieu_tong_hop, name='chi_tieu_tong_hop'),
+    path('chi-tieu/export/', views.chi_tieu_export_excel, name='chi_tieu_export_excel'),
 ]

@@ -26,6 +26,7 @@ import datetime
 import calendar
 from decimal import Decimal, ROUND_HALF_UP
 from django.contrib.auth.decorators import login_required
+from collections import defaultdict
 
 # ============ MANAGER DASHBOARD & USER MANAGEMENT ============
 
@@ -1451,3 +1452,355 @@ def api_online_users(request):
  
     return JsonResponse({'users': data, 'count': len(data)})
  
+
+# --- Thống kê chi tiêu tổng hợp theo dự án, tháng, năm ---
+@allow_viewer
+def chi_tieu_tong_hop(request):
+    from .models import Attendance, CongTrinh
+    from collections import defaultdict
+    import datetime
+    from decimal import Decimal
+
+    period   = request.GET.get('period', 'month')
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    nam      = request.GET.get('nam', str(datetime.date.today().year))
+    try:
+        nam = int(nam)
+    except ValueError:
+        nam = datetime.date.today().year
+
+    all_du_an = CongTrinh.objects.all().order_by('-ngay_bat_dau')
+
+    SUMMARY_NAMES = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+    att_qs = Attendance.objects.select_related('employee').exclude(
+        employee__name__in=SUMMARY_NAMES
+    ).filter(date__year=nam)
+    if du_an_id:
+        att_qs = att_qs.filter(cong_trinh_id=du_an_id)
+
+    rows = att_qs.values(
+        'date', 'employee__id', 'employee__name', 'employee__position',
+        'employee__daily_wage', 'regular_workday', 'overtime_workday',
+    )
+
+    period_data = defaultdict(lambda: {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0')})
+    nv_data     = defaultdict(lambda: {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0'), 'ten': '', 'nghe': ''})
+    tong_hc = tong_tc = tong_luong = Decimal('0')
+
+    for r in rows:
+        d     = r['date']
+        hc    = r['regular_workday']  or Decimal('0')
+        tc    = r['overtime_workday'] or Decimal('0')
+        wage  = r['employee__daily_wage'] or Decimal('0')
+        luong = hc * wage + tc * (wage / Decimal('8'))
+        emp_id = r['employee__id']
+
+        if period == 'week':
+            w   = get_week_start(d)
+            key = f"{w.strftime('%d/%m')}–{(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}"
+        elif period == 'month':
+            key = f"Tháng {d.month:02d}/{d.year}"
+        else:
+            key = str(d.year)
+
+        period_data[key]['hc']    += hc
+        period_data[key]['tc']    += tc
+        period_data[key]['luong'] += luong
+        nv_data[emp_id]['hc']    += hc
+        nv_data[emp_id]['tc']    += tc
+        nv_data[emp_id]['luong'] += luong
+        nv_data[emp_id]['ten']    = r['employee__name']
+        nv_data[emp_id]['nghe']   = r['employee__position'] or ''
+        tong_hc    += hc
+        tong_tc    += tc
+        tong_luong += luong
+
+    if period == 'week':
+        def wk(k):
+            try:
+                day, month = k.split('–')[0].split('/')
+                return (int(month), int(day))
+            except Exception:
+                return (0, 0)
+        sorted_periods = sorted(period_data.keys(), key=wk)
+    elif period == 'month':
+        def mk(k):
+            try:
+                parts = k.replace('Tháng ', '').split('/')
+                return (int(parts[1]), int(parts[0]))
+            except Exception:
+                return (0, 0)
+        sorted_periods = sorted(period_data.keys(), key=mk)
+    else:
+        sorted_periods = sorted(period_data.keys())
+
+    chart_labels = sorted_periods
+    chart_luong  = [float(period_data[k]['luong']) for k in sorted_periods]
+    chart_hc     = [float(period_data[k]['hc'])    for k in sorted_periods]
+    chart_tc     = [float(period_data[k]['tc'])    for k in sorted_periods]
+
+    nv_list = sorted(nv_data.values(), key=lambda x: x['luong'], reverse=True)
+
+    period_rows = [
+        {'label': k, 'hc': period_data[k]['hc'], 'tc': period_data[k]['tc'], 'luong': period_data[k]['luong']}
+        for k in sorted_periods
+    ]
+
+    years_qs  = Attendance.objects.dates('date', 'year')
+    all_years = sorted(set(d.year for d in years_qs), reverse=True) or [datetime.date.today().year]
+
+    context = {
+        'period': period, 'du_an_id': du_an_id, 'nam': nam,
+        'all_du_an': all_du_an, 'all_years': all_years,
+        'period_rows': period_rows, 'nv_list': nv_list,
+        'tong_hc': tong_hc, 'tong_tc': tong_tc, 'tong_luong': tong_luong,
+        'chart_labels': chart_labels, 'chart_luong': chart_luong,
+        'chart_hc': chart_hc, 'chart_tc': chart_tc,
+        'du_an_obj': CongTrinh.objects.filter(id=du_an_id).first() if du_an_id else None,
+    }
+    return render(request, 'payroll/chi_tieu_tong_hop.html', context)
+
+
+def chi_tieu_export_excel(request):
+    period   = request.GET.get('period', 'month')
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    nam      = request.GET.get('nam', str(datetime.date.today().year))
+    try:
+        nam = int(nam)
+    except ValueError:
+        nam = datetime.date.today().year
+
+    SUMMARY_NAMES = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+    att_qs = Attendance.objects.select_related('employee').exclude(
+        employee__name__in=SUMMARY_NAMES
+    ).filter(date__year=nam)
+    if du_an_id:
+        att_qs = att_qs.filter(cong_trinh_id=du_an_id)
+
+    du_an_name = ''
+    du_an_address = ''
+
+    if du_an_id:
+        try:
+            du_an = CongTrinh.objects.get(id=du_an_id)
+            du_an_name = du_an.ten_cong_trinh
+            du_an_address = getattr(du_an, 'dia_diem', '')
+        except CongTrinh.DoesNotExist:
+            pass
+        
+    period_data = defaultdict(lambda: {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0')})
+    nv_data     = defaultdict(lambda: {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0'), 'ten': '', 'nghe': ''})
+
+    for r in att_qs.values('date', 'employee__id', 'employee__name', 'employee__position',
+                            'employee__daily_wage', 'regular_workday', 'overtime_workday'):
+        d     = r['date']
+        hc    = r['regular_workday']  or Decimal('0')
+        tc    = r['overtime_workday'] or Decimal('0')
+        wage  = r['employee__daily_wage'] or Decimal('0')
+        luong = hc * wage + tc * (wage / Decimal('8'))
+        emp_id = r['employee__id']
+
+        if period == 'week':
+            w   = get_week_start(d)
+            key = f"{w.strftime('%d/%m')}–{(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}"
+        elif period == 'month':
+            key = f"Tháng {d.month:02d}/{d.year}"
+        else:
+            key = str(d.year)
+
+        period_data[key]['hc']    += hc
+        period_data[key]['tc']    += tc
+        period_data[key]['luong'] += luong
+        nv_data[emp_id]['hc']    += hc
+        nv_data[emp_id]['tc']    += tc
+        nv_data[emp_id]['luong'] += luong
+        nv_data[emp_id]['ten']    = r['employee__name']
+        nv_data[emp_id]['nghe']   = r['employee__position'] or ''
+
+    if period == 'week':
+        def wk(k):
+            try:
+                day, month = k.split('–')[0].split('/')
+                return (int(month), int(day))
+            except Exception:
+                return (0, 0)
+        sorted_periods = sorted(period_data.keys(), key=wk)
+    elif period == 'month':
+        def mk(k):
+            try:
+                parts = k.replace('Tháng ', '').split('/')
+                return (int(parts[1]), int(parts[0]))
+            except Exception:
+                return (0, 0)
+        sorted_periods = sorted(period_data.keys(), key=mk)
+    else:
+        sorted_periods = sorted(period_data.keys())
+
+    nv_list = sorted(nv_data.values(), key=lambda x: x['luong'], reverse=True)
+
+    wb  = Workbook()
+    ws1 = wb.active
+    ws1.title = 'Tổng hợp'
+
+    bold      = Font(bold=True)
+    title_f   = Font(bold=True, size=13)
+    fill_g    = PatternFill(start_color='D9EAD3', end_color='D9EAD3', fill_type='solid')
+    fill_b    = PatternFill(start_color='CFE2F3', end_color='CFE2F3', fill_type='solid')
+    fill_o    = PatternFill(start_color='FCE5CD', end_color='FCE5CD', fill_type='solid')
+    ctr       = Alignment(horizontal='center', vertical='center')
+    bdr       = Border(left=Side(style='thin'), right=Side(style='thin'),
+                       top=Side(style='thin'), bottom=Side(style='thin'))
+
+    period_label = {'week': 'TUẦN', 'month': 'THÁNG', 'year': 'NĂM'}.get(period, 'THÁNG')
+
+    # Sheet 1
+    ws1.merge_cells('A1:E1')
+    ws1['A1'] = 'CÔNG TY TNHH XÂY DỰNG CPT'
+    ws1['A1'].font = title_f
+    ws1['A1'].alignment = ctr
+
+    ws1.merge_cells('A2:E2')
+    if du_an_name:
+        dia_chi = du_an_address or 'TP. Hồ Chí Minh'
+        ws1['A2'] = f"Địa chỉ: {dia_chi} | Dự án: {du_an_name}"
+    else:
+        ws1['A2'] = "Địa chỉ: TP. Hồ Chí Minh | Dự án: TẤT CẢ DỰ ÁN"
+    ws1['A2'].font = Font(size=11, italic=True)
+    ws1['A2'].alignment = ctr
+
+    ws1.merge_cells('A3:E3')
+    title_txt = f'BÁO CÁO CHI TIÊU THEO {period_label} — NĂM {nam}'
+    ws1['A3'] = title_txt
+    ws1['A3'].font = title_f
+    ws1['A3'].alignment = ctr
+    ws1.append([])
+
+    headers = ['Kỳ', 'Tổng HC', 'Tổng TC', 'Tổng lương (đ)', '% kỳ trước']
+    ws1.append(headers)
+    for c in range(1, 6):
+        cell = ws1.cell(row=5, column=c)
+        cell.font = bold
+        cell.fill = fill_g
+        cell.border = bdr
+        cell.alignment = ctr
+
+    ws1.column_dimensions['A'].width = 30
+    ws1.column_dimensions['B'].width = 12
+    ws1.column_dimensions['C'].width = 12
+    ws1.column_dimensions['D'].width = 20
+    ws1.column_dimensions['E'].width = 14
+
+    prev_luong = None
+    tong_hc = tong_tc = tong_luong = Decimal('0')
+    for ri, k in enumerate(sorted_periods, 5):
+        pd   = period_data[k]
+        pct  = ''
+        if prev_luong and prev_luong > 0:
+            pct = f"{float((pd['luong'] - prev_luong) / prev_luong * 100):+.1f}%"
+        prev_luong  = pd['luong']
+        tong_hc    += pd['hc']
+        tong_tc    += pd['tc']
+        tong_luong += pd['luong']
+        ws1.append([k, float(pd['hc']), float(pd['tc']), float(pd['luong']), pct])
+        for c in range(1, 6):
+            cell = ws1.cell(row=ri, column=c)
+            cell.border = bdr
+            cell.alignment = ctr
+            if c == 4:
+                cell.number_format = '#,##0'
+                if pd['luong'] > 0:
+                    cell.fill = fill_o
+
+    tr = len(sorted_periods) + 5
+    ws1.append(['TỔNG CỘNG', float(tong_hc), float(tong_tc), float(tong_luong), ''])
+    for c in range(1, 6):
+        cell = ws1.cell(row=tr, column=c)
+        cell.font = bold
+        cell.fill = fill_b
+        cell.border = bdr
+        cell.alignment = ctr
+        if c == 4:
+            cell.number_format = '#,##0'
+
+    # Sheet 2
+    ws2 = wb.create_sheet('Theo nhân viên')
+
+    ws2.merge_cells('A1:G1')
+    ws2['A1'] = 'CÔNG TY TNHH XÂY DỰNG CPT'
+    ws2['A1'].font = title_f
+    ws2['A1'].alignment = ctr
+
+    ws2.merge_cells('A2:G2')
+    if du_an_name:
+        dia_chi = du_an_address or 'TP. Hồ Chí Minh'
+        ws2['A2'] = f"Địa chỉ: {dia_chi} | Dự án: {du_an_name}"
+    else:
+        ws2['A2'] = "Địa chỉ: TP. Hồ Chí Minh | Dự án: TẤT CẢ DỰ ÁN"
+    ws2['A2'].font = Font(size=11, italic=True)
+    ws2['A2'].alignment = ctr
+
+    ws2.merge_cells('A3:G3')
+    ws2['A3'] = f'CHI TIẾT NHÂN VIÊN — NĂM {nam}'
+    ws2['A3'].font = title_f
+    ws2['A3'].alignment = ctr
+
+    nv_hdrs = ['STT', 'Họ tên', 'Nghề', 'Tổng HC', 'Tổng TC', 'Tổng lương (đ)', '% tổng']
+    for col_num, value in enumerate(nv_hdrs, 1):
+        cell = ws2.cell(row=5, column=col_num)
+        cell.value = value
+        cell.font = bold
+        cell.fill = fill_g
+        cell.border = bdr
+        cell.alignment = ctr
+
+    ws2.column_dimensions['A'].width = 6
+    ws2.column_dimensions['B'].width = 24
+    ws2.column_dimensions['C'].width = 10
+    ws2.column_dimensions['D'].width = 12
+    ws2.column_dimensions['E'].width = 12
+    ws2.column_dimensions['F'].width = 20
+    ws2.column_dimensions['G'].width = 10
+
+    tong_luong_nv = sum(nv['luong'] for nv in nv_list)
+    for i, nv in enumerate(nv_list, 1):
+        pct = f"{float(nv['luong'] / tong_luong_nv * 100):.1f}%" if tong_luong_nv > 0 else '0%'
+        ws2.append([i, nv['ten'], nv['nghe'], float(nv['hc']), float(nv['tc']), float(nv['luong']), pct])
+        
+        row_num = ws2.max_row
+        for c in range(1, 8):
+            cell = ws2.cell(row=row_num, column=c)
+            cell.border = bdr
+            cell.alignment = ctr
+            if c == 6:
+                cell.number_format = '#,##0'
+
+    tr2 = ws2.max_row + 1
+    ws2.append(['', 'TỔNG CỘNG', '', '', '', float(tong_luong_nv), '100%'])
+
+    for c in range(1, 8):
+        cell = ws2.cell(row=tr2, column=c)
+        cell.font = bold
+        cell.fill = fill_b
+        cell.border = bdr
+        cell.alignment = ctr
+        if c == 6:
+            cell.number_format = '#,##0'
+
+    fname = f"ChiTieu_{period}_{nam}"
+    if du_an_name:
+        safe_name = du_an_name.replace(' ', '_').replace('/', '').replace('\\', '').replace(':', '')
+        fname += f"_{safe_name}"
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{fname}.xlsx"'
+
+    wb.save(response)
+    return response
