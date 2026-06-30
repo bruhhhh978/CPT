@@ -1,374 +1,519 @@
 {% extends 'payroll/base.html' %}
 {% load humanize %}
 
-{% block title %}Chi tiêu công — CPT{% endblock %}
+{% block title %}Tổng hợp chi tiêu công — CPT{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
+/* =========================
+   RICH AESTHETICS & TOKENS
+========================= */
+:root {
+    --primary: #f97316; /* Align with global primary */
+    --primary-light: #fdba74;
+    --primary-dark: #ea580c;
+    --secondary: #0ea5e9;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --surface: rgba(255, 255, 255, 0.88); /* Align with global card-bg */
+    --background: transparent;
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(15, 23, 42, 0.15);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+    --shadow-hover: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+}
 
 /* =========================
-   HEADER
+   HEADER & ALERTS
 ========================= */
-.ct-header{
-    margin-bottom:1.5rem;
+.ct-header {
+    margin-bottom: 2rem;
+    position: relative;
 }
 
-.ct-header h1{
-    font-size:1.8rem;
-    font-weight:700;
-    margin-bottom:6px;
-    color:#1e293b;
+.ct-header h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    background: linear-gradient(to right, #f97316, #f59e0b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
 }
 
-.ct-header p{
-    color:#64748b;
-    font-size:.9rem;
+.ct-header p {
+    color: #f1f5f9;
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.alert-tet {
+    background: linear-gradient(to right, #fff7ed, #ffedd5);
+    border-left: 5px solid var(--warning);
+    padding: 1.25rem 1.5rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: var(--shadow-sm);
+    animation: fadeIn 0.5s ease-out;
+}
+
+.alert-tet i {
+    font-size: 1.5rem;
+    color: var(--warning);
+}
+
+.alert-tet .alert-content h4 {
+    margin: 0 0 0.25rem 0;
+    color: #9a3412;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.alert-tet .alert-content p {
+    margin: 0;
+    color: #c2410c;
+    font-size: 0.95rem;
 }
 
 /* =========================
-   FILTER
+   FILTER BAR (GLASSMORPHISM)
 ========================= */
-.filter-bar{
-    display:flex;
-    flex-wrap:wrap;
-    gap:12px;
-    align-items:flex-end;
-
-    background:#ffffff;
-    border:none;
-    border-radius:18px;
-    padding:18px;
-
-    box-shadow:
-        0 4px 20px rgba(0,0,0,.05);
-
-    margin-bottom:20px;
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-end;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 2.5rem;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.fg{
-    display:flex;
-    flex-direction:column;
-    gap:6px;
+.filter-bar:hover {
+    box-shadow: var(--shadow-lg);
 }
 
-.fg label{
-    font-size:.75rem;
-    font-weight:600;
-    color:#64748b;
-    text-transform:uppercase;
+.fg {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 200px;
 }
 
-.fg select{
-    height:42px;
-    min-width:180px;
-
-    border:1px solid #e2e8f0;
-    border-radius:10px;
-
-    background:#f8fafc;
-    color:#1e293b;
-
-    padding:0 12px;
+.fg label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
-.filter-actions{
-    margin-left:auto;
-    display:flex;
-    gap:10px;
+.fg select {
+    height: 48px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--text-main);
+    padding: 0 1rem;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1.2rem;
 }
 
-.filter-actions .btn{
-    height:42px;
-    border-radius:10px;
+.fg select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+.filter-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.filter-actions .btn {
+    height: 48px;
+    padding: 0 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+}
+
+.btn-outline {
+    background: var(--surface);
+    color: var(--text-main);
+    border: 2px solid var(--border) !important;
+}
+
+.btn-outline:hover {
+    background: var(--background);
+    border-color: var(--text-muted) !important;
 }
 
 /* =========================
    STAT CARDS
 ========================= */
-.stat-grid{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:18px;
-    margin-bottom:20px;
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
 }
 
-.stat-card{
-    background:#ffffff;
-    border:none;
-    border-radius:18px;
-    padding:22px;
-
-    box-shadow:
-        0 4px 20px rgba(0,0,0,.06);
-
-    transition:.25s;
+.stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 1.75rem;
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 140px;
 }
 
-.stat-card:hover{
-    transform:translateY(-4px);
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 4px;
+    background: var(--primary);
+    opacity: 0.8;
 }
 
-.sc-label{
-    font-size:.8rem;
-    color:#64748b;
-    font-weight:600;
-    margin-bottom:10px;
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-hover);
 }
 
-.sc-value{
-    font-size:2rem;
-    font-weight:700;
+.stat-card.blue::before { background: var(--secondary); }
+.stat-card.green::before { background: var(--success); }
+.stat-card.orange::before { background: var(--warning); }
+.stat-card.purple::before { background: var(--primary); }
+
+.sc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
 }
 
-.sc-sub{
-    margin-top:8px;
-    color:#94a3b8;
+.sc-label {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
-.orange .sc-value{
-    color:#f97316;
+.sc-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
 }
 
-.blue .sc-value{
-    color:#2563eb;
+.blue .sc-icon { background: rgba(14, 165, 233, 0.1); color: var(--secondary); }
+.green .sc-icon { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+.orange .sc-icon { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+.purple .sc-icon { background: rgba(79, 70, 229, 0.1); color: var(--primary); }
+
+.sc-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1;
 }
 
-.green .sc-value{
-    color:#16a34a;
+.sc-sub {
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 500;
 }
+
+/* =========================
+   DATA TABLE PANEL
+========================= */
+.card-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 2.5rem;
+    overflow-x: auto;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.data-table th {
+    background: rgba(255, 255, 255, 0.5);
+    padding: 1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+}
+
+.data-table th:first-child { border-top-left-radius: 12px; border-bottom-left-radius: 12px; }
+.data-table th:last-child { border-top-right-radius: 12px; border-bottom-right-radius: 12px; }
+
+.data-table td {
+    padding: 1.25rem 1rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 1rem;
+    font-weight: 500;
+    transition: background 0.2s ease;
+}
+
+.data-table tbody tr {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.data-table tbody tr:hover td {
+    background: rgba(79, 70, 229, 0.03);
+}
+
+.data-table tbody tr:hover td:first-child {
+    border-left: 4px solid var(--primary);
+    padding-left: calc(1rem - 4px);
+}
+
+.total-row {
+    background: rgba(79, 70, 229, 0.05) !important;
+    border-top: 2px solid var(--primary) !important;
+}
+
+.total-row td {
+    font-weight: 800 !important;
+    color: var(--primary-dark) !important;
+    font-size: 1.1rem !important;
+    border-bottom: none !important;
+}
+
+.total-row:hover td {
+    background: rgba(79, 70, 229, 0.08) !important;
+    border-left: none !important;
+    padding-left: 1rem !important;
+}
+
+.num { text-align: right; }
+.text-danger { color: var(--danger); }
+.text-success { color: var(--success); }
+.fw-bold { font-weight: 700; }
+.luong-val { color: var(--primary); font-weight: 700; font-size: 1.1rem; }
 
 /* =========================
    CHARTS
 ========================= */
-.chart-grid{
-    display:grid;
-    grid-template-columns:2fr 1fr;
-    gap:20px;
-    margin-bottom:20px;
+.chart-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
 }
 
-.chart-card{
-    background:#ffffff;
-    border:none;
-    border-radius:18px;
-    padding:20px;
-
-    box-shadow:
-        0 4px 20px rgba(0,0,0,.06);
+.chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 20px;
+    padding: 1.75rem;
+    box-shadow: var(--shadow-md);
 }
 
-.chart-card h3{
-    margin-bottom:20px;
-    font-size:1rem;
-    font-weight:600;
-    color:#1e293b;
+.chart-card h3 {
+    margin: 0 0 1.5rem 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
 }
 
-.chart-card canvas{
-    height:320px !important;
-}
-
-/* =========================
-   TAB
-========================= */
-.tab-row{
-    display:flex;
-    gap:10px;
-    margin-bottom:15px;
-}
-
-.tab-btn{
-    border:none;
-    border-radius:10px;
-    padding:10px 18px;
-
-    background:#ffffff;
-    color:#64748b;
-
-    cursor:pointer;
-
-    box-shadow:
-        0 2px 8px rgba(0,0,0,.06);
-
-    transition:.25s;
-}
-
-.tab-btn.active{
-    background:#f97316;
-    color:white;
-}
-
-.tab-btn:hover{
-    transform:translateY(-2px);
+.chart-container {
+    position: relative;
+    height: 320px;
+    width: 100%;
 }
 
 /* =========================
-   TABLE PANEL
+   ANIMATIONS & RESPONSIVE
 ========================= */
-.card-panel{
-    background:#ffffff;
-    border:none;
-    border-radius:18px;
-    padding:20px;
-
-    box-shadow:
-        0 4px 20px rgba(0,0,0,.06);
-
-    overflow-x:auto;
-}
-
-.section-title{
-    font-size:1rem;
-    font-weight:600;
-    margin-bottom:15px;
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* =========================
-   TABLE
+   MODAL POPUP
 ========================= */
-.data-table{
-    width:100%;
-    border-collapse:collapse;
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out;
+}
+.modal-content {
+    background: var(--surface);
+    width: 90vw;
+    height: 90vh;
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+}
+.close-modal {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    background: var(--background);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--text-muted);
+    cursor: pointer;
+    z-index: 10000;
+    transition: all 0.2s ease;
+    border: 1px solid var(--border);
+}
+.close-modal:hover { 
+    color: var(--danger);
+    background: #fee2e2;
+    border-color: #fecaca;
+    transform: rotate(90deg);
 }
 
-.data-table thead{
-    background:#f8fafc;
+@media(max-width: 1200px) {
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .chart-grid { grid-template-columns: 1fr; }
 }
 
-.data-table th{
-    padding:14px;
-    font-size:.78rem;
-    text-transform:uppercase;
-    color:#64748b;
-    border-bottom:2px solid #e2e8f0;
+@media(max-width: 768px) {
+    .stat-grid { grid-template-columns: 1fr; }
+    .filter-bar { flex-direction: column; align-items: stretch; }
+    .filter-actions { flex-direction: column; width: 100%; }
+    .ct-header h1 { font-size: 1.8rem; }
 }
-
-.data-table td{
-    padding:14px;
-    border-bottom:1px solid #f1f5f9;
-}
-
-.data-table tbody tr:hover{
-    background:#fff7ed;
-}
-
-.total-row{
-    background:#fff7ed !important;
-    font-weight:700;
-}
-
-.num{
-    text-align:right;
-}
-
-.luong-val{
-    color:#f97316;
-    font-weight:700;
-}
-
-/* =========================
-   RANK
-========================= */
-.nv-rank{
-    width:30px;
-    height:30px;
-
-    border-radius:50%;
-
-    display:flex;
-    align-items:center;
-    justify-content:center;
-
-    font-size:.75rem;
-    font-weight:700;
-}
-
-.rank-1{
-    background:#fef3c7;
-}
-
-.rank-2{
-    background:#e2e8f0;
-}
-
-.rank-3{
-    background:#fed7aa;
-}
-
-.rank-n{
-    background:#f8fafc;
-}
-
-/* =========================
-   EMPTY
-========================= */
-.empty-msg{
-    text-align:center;
-    padding:40px;
-    color:#94a3b8;
-}
-
-/* =========================
-   MOBILE
-========================= */
-@media(max-width:992px){
-
-    .stat-grid{
-        grid-template-columns:1fr;
-    }
-
-    .chart-grid{
-        grid-template-columns:1fr;
-    }
-
-    .filter-actions{
-        width:100%;
-        margin-left:0;
-    }
-
-    .filter-actions .btn{
-        flex:1;
-    }
-
-    .fg{
-        width:100%;
-    }
-
-    .fg select{
-        width:100%;
-    }
-}
-
 </style>
 {% endblock %}
 
 {% block content %}
 
 <div class="ct-header">
-    <h1>📊 Tổng hợp chi tiêu công</h1>
+    <h1>📈 Tổng hợp Chi Tiêu Công</h1>
     <p>
-        {% if du_an_obj %}Dự án: <strong>{{ du_an_obj.ten_cong_trinh }}</strong> —{% endif %}
-        Năm {{ nam }} — Theo {{ period }}
+        {% if du_an_obj %}Dự án: <strong style="color:var(--primary)">{{ du_an_obj.ten_cong_trinh }}</strong> —{% endif %}
+        Năm {{ nam|stringformat:"i" }}
+        {% if thang %} — Tháng {{ thang }}{% else %} — Toàn bộ các tháng{% endif %}
     </p>
+</div>
+
+<!-- Alert Thưởng Tết -->
+<div class="alert-tet">
+    <i class="fas fa-exclamation-circle"></i>
+    <div class="alert-content">
+        <h4>Lưu ý về Thưởng Tết</h4>
+        <p>Tổng chi tiêu hiện tại <strong>chưa bao gồm tiền Thưởng Tết</strong> do chưa xác định chính xác thời điểm chi trả. Các khoản Thưởng Tết sẽ được tổng kết ở mục riêng.</p>
+    </div>
 </div>
 
 <!-- Filter -->
 <form method="GET" class="filter-bar">
     <div class="fg">
-        <label>Kỳ báo cáo</label>
-        <select name="period">
-            <option value="week"  {% if period == 'week'  %}selected{% endif %}>📅 Theo tuần</option>
-            <option value="month" {% if period == 'month' %}selected{% endif %}>🗓️ Theo tháng</option>
-            <option value="year"  {% if period == 'year'  %}selected{% endif %}>📆 Theo năm</option>
+        <label>Năm báo cáo</label>
+        <select name="nam">
+            {% for y in all_years %}
+            <option value="{{ y|stringformat:'i' }}" {% if y == nam %}selected{% endif %}>Năm {{ y|stringformat:"i" }}</option>
+            {% endfor %}
         </select>
     </div>
     <div class="fg">
-        <label>Năm</label>
-        <select name="nam">
-            {% for y in all_years %}
-            <option value="{{ y }}" {% if y == nam %}selected{% endif %}>{{ y }}</option>
+        <label>Tháng</label>
+        <select name="thang">
+            <option value="">— Tất cả các tháng —</option>
+            {% for m in "123456789"|make_list %}
+            <option value="{{ m }}" {% if m == thang %}selected{% endif %}>Tháng {{ m }}</option>
             {% endfor %}
+            <option value="10" {% if '10' == thang %}selected{% endif %}>Tháng 10</option>
+            <option value="11" {% if '11' == thang %}selected{% endif %}>Tháng 11</option>
+            <option value="12" {% if '12' == thang %}selected{% endif %}>Tháng 12</option>
         </select>
     </div>
     <div class="fg">
@@ -383,8 +528,8 @@
         </select>
     </div>
     <div class="filter-actions">
-        <button type="submit" class="btn btn-primary">🔍 Xem</button>
-        <a href="{% url 'payroll:chi_tieu_export_excel' %}?period={{ period }}&nam={{ nam }}&du_an_id={{ du_an_id }}"
+        <button type="submit" class="btn btn-primary"><i class="fas fa-filter"></i> Lọc dữ liệu</button>
+        <a href="{% url 'payroll:chi_tieu_export_excel' %}?nam={{ nam }}&thang={{ thang }}&du_an_id={{ du_an_id }}"
            class="btn btn-outline">
             <i class="fas fa-file-excel"></i> Xuất Excel
         </a>
@@ -393,147 +538,266 @@
 
 <!-- Stat cards -->
 <div class="stat-grid">
-    <div class="stat-card orange">
-        <div class="sc-label">💰 Tổng lương phải trả</div>
-        <div class="sc-value">{{ tong_luong|floatformat:0|intcomma }} đ</div>
-        <div class="sc-sub">Năm {{ nam }}</div>
-    </div>
     <div class="stat-card blue">
-        <div class="sc-label">📅 Tổng ngày công HC</div>
-        <div class="sc-value">{{ tong_hc|floatformat:1 }}</div>
-        <div class="sc-sub">Ngày công chính thức</div>
+        <div class="sc-header">
+            <div class="sc-label">Ngày công HC</div>
+            <div class="sc-icon"><i class="fas fa-calendar-check"></i></div>
+        </div>
+        <div>
+            <div class="sc-value">{{ tong_hc|floatformat:1 }}</div>
+            <div class="sc-sub">Tổng công hành chính</div>
+        </div>
     </div>
+    
     <div class="stat-card green">
-        <div class="sc-label">⏱️ Tổng ngày công TC</div>
-        <div class="sc-value">{{ tong_tc|floatformat:1 }}</div>
-        <div class="sc-sub">Ngày công tăng ca</div>
+        <div class="sc-header">
+            <div class="sc-label">Ngày công TC</div>
+            <div class="sc-icon"><i class="fas fa-clock"></i></div>
+        </div>
+        <div>
+            <div class="sc-value">{{ tong_tc|floatformat:1 }}</div>
+            <div class="sc-sub">Tổng công tăng ca</div>
+        </div>
+    </div>
+
+    <div class="stat-card orange">
+        <div class="sc-header">
+            <div class="sc-label">Tăng / Giảm</div>
+            <div class="sc-icon"><i class="fas fa-balance-scale"></i></div>
+        </div>
+        <div>
+            <div class="sc-value {% if tong_tang_giam > 0 %}text-success{% elif tong_tang_giam < 0 %}text-danger{% endif %}">
+                {% if tong_tang_giam > 0 %}+{% endif %}{{ tong_tang_giam|floatformat:0|intcomma }}
+            </div>
+            <div class="sc-sub">Thưởng, Phạt, Ứng (đ)</div>
+        </div>
+    </div>
+
+    <div class="stat-card purple">
+        <div class="sc-header">
+            <div class="sc-label">Tổng Chi Tiêu</div>
+            <div class="sc-icon"><i class="fas fa-wallet"></i></div>
+        </div>
+        <div>
+            <div class="sc-value">{{ tong_chi_tieu|floatformat:0|intcomma }}</div>
+            <div class="sc-sub">Tiền lương + Tăng/giảm (đ)</div>
+        </div>
     </div>
 </div>
 
-<!-- Charts -->
-<div class="chart-grid">
-    <div class="chart-card">
-        <h3>💵 Lương theo {% if period == 'week' %}tuần{% elif period == 'month' %}tháng{% else %}năm{% endif %}</h3>
-        <canvas id="chartLuong"></canvas>
-    </div>
-    <div class="chart-card">
-        <h3>📅 Ngày công HC / TC</h3>
-        <canvas id="chartCong"></canvas>
-    </div>
-</div>
+<!-- Bảng chi tiết Tổng cộng -->
+{% if is_multi_project %}
+<h2 style="margin-top: 1rem; margin-bottom: 1rem; font-size: 1.4rem; color: var(--primary);">
+    <i class="fas fa-globe"></i> TỔNG HỢP TẤT CẢ DỰ ÁN
+</h2>
+{% endif %}
 
-<!-- Tabs -->
-<div class="tab-row">
-    <button class="tab-btn active" onclick="showTab('period', this)">📋 Theo kỳ</button>
-    <button class="tab-btn"        onclick="showTab('nhanvien', this)">👷 Theo nhân viên</button>
-</div>
-
-<!-- Bảng theo kỳ -->
-<div id="tab-period" class="card-panel">
+<div class="card-panel">
     <div class="section-title">
-        Chi tiết theo {% if period == 'week' %}tuần{% elif period == 'month' %}tháng{% else %}năm{% endif %}
+        <i class="fas fa-table" style="color:var(--primary)"></i>
+        Bảng kê chi tiết theo {% if thang %}Tuần (Tháng {{ thang }}){% else %}Tháng (Năm {{ nam|stringformat:"i" }}){% endif %}
     </div>
     <table class="data-table">
         <thead>
             <tr>
                 <th>#</th>
-                <th>Kỳ</th>
-                <th class="num">HC</th>
-                <th class="num">TC</th>
-                <th class="num">Tổng lương (đ)</th>
+                <th>Kỳ báo cáo</th>
+                <th class="num">Tổng HC</th>
+                <th class="num">Tổng TC</th>
+                <th class="num">Tiền Lương (đ)</th>
+                <th class="num">Tăng/Giảm (đ)</th>
+                <th class="num">Tổng Chi Tiêu (đ)</th>
             </tr>
         </thead>
         <tbody>
             {% for row in period_rows %}
-            <tr>
+            <tr onclick="handleRowClick('{{ row.start_date|date:"Y-m-d" }}', '{{ row.thang_val }}', '')">
                 <td style="color:var(--text-muted)">{{ forloop.counter }}</td>
-                <td><strong>{{ row.label }}</strong></td>
+                <td><strong>{{ row.period_name }}</strong></td>
                 <td class="num">{{ row.hc|floatformat:1 }}</td>
                 <td class="num">{{ row.tc|floatformat:1 }}</td>
-                <td class="num luong-val">{{ row.luong|floatformat:0|intcomma }} đ</td>
+                <td class="num">{{ row.luong|floatformat:0|intcomma }}</td>
+                <td class="num {% if row.tang_giam > 0 %}text-success{% elif row.tang_giam < 0 %}text-danger{% endif %} fw-bold">
+                    {% if row.tang_giam > 0 %}+{% endif %}{{ row.tang_giam|floatformat:0|intcomma }}
+                </td>
+                <td class="num luong-val">{{ row.chi_tieu|floatformat:0|intcomma }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="5" class="empty-msg">Chưa có dữ liệu cho kỳ này</td></tr>
+            <tr><td colspan="7" style="text-align:center; padding: 3rem; color: var(--text-muted);">Không có dữ liệu chi tiêu cho khoảng thời gian này.</td></tr>
             {% endfor %}
+            
             {% if period_rows %}
             <tr class="total-row">
                 <td colspan="2">TỔNG CỘNG</td>
                 <td class="num">{{ tong_hc|floatformat:1 }}</td>
                 <td class="num">{{ tong_tc|floatformat:1 }}</td>
-                <td class="num luong-val">{{ tong_luong|floatformat:0|intcomma }} đ</td>
+                <td class="num">{{ tong_luong|floatformat:0|intcomma }}</td>
+                <td class="num {% if tong_tang_giam > 0 %}text-success{% elif tong_tang_giam < 0 %}text-danger{% endif %} fw-bold">
+                    {% if tong_tang_giam > 0 %}+{% endif %}{{ tong_tang_giam|floatformat:0|intcomma }}
+                </td>
+                <td class="num luong-val">{{ tong_chi_tieu|floatformat:0|intcomma }}</td>
             </tr>
             {% endif %}
         </tbody>
     </table>
+    <div style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
+        <i class="fas fa-info-circle"></i> Mẹo: Click vào một dòng bất kỳ để xem chi tiết bảng lương của {% if thang %}tuần{% else %}tháng{% endif %} đó.
+    </div>
 </div>
 
-<!-- Bảng nhân viên -->
-<div id="tab-nhanvien" class="card-panel" style="display:none">
-    <div class="section-title">Chi tiết theo nhân viên — sắp xếp theo lương giảm dần</div>
+<!-- Charts for Grand Total -->
+{% if period_rows %}
+<div class="chart-grid" style="margin-bottom: 2.5rem;">
+    <div class="chart-card">
+        <h3><i class="fas fa-chart-line" style="color:var(--primary); margin-right:8px;"></i> Biểu đồ Tổng Chi Tiêu</h3>
+        <div class="chart-container">
+            <canvas id="chartChiTieu"></canvas>
+        </div>
+    </div>
+    {% if is_multi_project %}
+    <div class="chart-card">
+        <h3><i class="fas fa-chart-pie" style="color:var(--warning); margin-right:8px;"></i> Tỷ Trọng Theo Dự Án</h3>
+        <div class="chart-container" style="display:flex; justify-content:center;">
+            <canvas id="chartDoughnut" style="max-width: 300px; max-height: 300px;"></canvas>
+        </div>
+    </div>
+    {% else %}
+    <div class="chart-card">
+        <h3><i class="fas fa-chart-bar" style="color:var(--secondary); margin-right:8px;"></i> Biểu đồ Ngày Công</h3>
+        <div class="chart-container">
+            <canvas id="chartCong"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Phần Chi tiết từng dự án -->
+{% if is_multi_project and projects_data %}
+<h2 style="margin-top: 3rem; margin-bottom: 1.5rem; font-size: 1.4rem; color: var(--secondary);">
+    <i class="fas fa-building"></i> CHI TIẾT THEO TỪNG DỰ ÁN
+</h2>
+
+{% for p in projects_data %}
+<div class="card-panel" style="border-top: 4px solid var(--secondary);">
+    <div class="section-title">
+        <i class="fas fa-project-diagram" style="color:var(--secondary)"></i>
+        Dự án: {{ p.name }}
+    </div>
     <table class="data-table">
         <thead>
             <tr>
-                <th style="width:40px">#</th>
-                <th>Họ tên</th>
-                <th>Nghề</th>
-                <th class="num">HC</th>
-                <th class="num">TC</th>
-                <th class="num">Tổng lương (đ)</th>
-                <th class="num">% tổng</th>
+                <th>#</th>
+                <th>Kỳ báo cáo</th>
+                <th class="num">Tổng HC</th>
+                <th class="num">Tổng TC</th>
+                <th class="num">Tiền Lương (đ)</th>
+                <th class="num">Tăng/Giảm (đ)</th>
+                <th class="num">Tổng Chi Tiêu (đ)</th>
             </tr>
         </thead>
         <tbody>
-            {% for nv in nv_list %}
-            <tr>
-                <td>
-                    <span class="nv-rank {% if forloop.counter == 1 %}rank-1{% elif forloop.counter == 2 %}rank-2{% elif forloop.counter == 3 %}rank-3{% else %}rank-n{% endif %}">
-                        {{ forloop.counter }}
-                    </span>
+            {% for row in p.rows %}
+            <tr onclick="handleRowClick('{{ row.start_date|date:"Y-m-d" }}', '{{ row.thang_val }}', '{{ p.id }}')">
+                <td style="color:var(--text-muted)">{{ forloop.counter }}</td>
+                <td><strong>{{ row.period_name }}</strong></td>
+                <td class="num">{{ row.hc|floatformat:1 }}</td>
+                <td class="num">{{ row.tc|floatformat:1 }}</td>
+                <td class="num">{{ row.luong|floatformat:0|intcomma }}</td>
+                <td class="num {% if row.tang_giam > 0 %}text-success{% elif row.tang_giam < 0 %}text-danger{% endif %} fw-bold">
+                    {% if row.tang_giam > 0 %}+{% endif %}{{ row.tang_giam|floatformat:0|intcomma }}
                 </td>
-                <td><strong>{{ nv.ten }}</strong></td>
-                <td style="color:var(--text-muted)">{{ nv.nghe|default:"—" }}</td>
-                <td class="num">{{ nv.hc|floatformat:1 }}</td>
-                <td class="num">{{ nv.tc|floatformat:1 }}</td>
-                <td class="num luong-val">{{ nv.luong|floatformat:0|intcomma }} đ</td>
-                <td class="num">
-                    {% if tong_luong > 0 %}{% widthratio nv.luong tong_luong 100 %}%{% else %}0%{% endif %}
-                </td>
+                <td class="num luong-val">{{ row.chi_tieu|floatformat:0|intcomma }}</td>
             </tr>
-            {% empty %}
-            <tr><td colspan="7" class="empty-msg">Chưa có dữ liệu</td></tr>
             {% endfor %}
-            {% if nv_list %}
             <tr class="total-row">
-                <td colspan="3">TỔNG CỘNG</td>
-                <td class="num">{{ tong_hc|floatformat:1 }}</td>
-                <td class="num">{{ tong_tc|floatformat:1 }}</td>
-                <td class="num luong-val">{{ tong_luong|floatformat:0|intcomma }} đ</td>
-                <td class="num">100%</td>
+                <td colspan="2">TỔNG CỘNG ({{ p.name }})</td>
+                <td class="num">{{ p.tong_hc|floatformat:1 }}</td>
+                <td class="num">{{ p.tong_tc|floatformat:1 }}</td>
+                <td class="num">{{ p.tong_luong|floatformat:0|intcomma }}</td>
+                <td class="num {% if p.tong_tang_giam > 0 %}text-success{% elif p.tong_tang_giam < 0 %}text-danger{% endif %} fw-bold">
+                    {% if p.tong_tang_giam > 0 %}+{% endif %}{{ p.tong_tang_giam|floatformat:0|intcomma }}
+                </td>
+                <td class="num luong-val">{{ p.tong_chi_tieu|floatformat:0|intcomma }}</td>
             </tr>
-            {% endif %}
         </tbody>
     </table>
 </div>
+{% endfor %}
+{% endif %}
+
+<!-- Modal Overlay cho Bảng Lương Tuần -->
+<div id="payrollModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content">
+        <div class="close-modal" onclick="closeModal()"><i class="fas fa-times"></i></div>
+        <iframe id="payrollIframe" src="" style="width:100%; height:100%; border:none; display:block;"></iframe>
+    </div>
+</div>
+
+{% if period_rows %}
+    {{ chart_labels|json_script:"labels-data" }}
+    {{ chart_luong|json_script:"chiTieu-data" }}
+    {{ chart_hc|json_script:"hc-data" }}
+    {{ chart_tc|json_script:"tc-data" }}
+    {{ doughnut_labels|json_script:"doughnutLabels-data" }}
+    {{ doughnut_data|json_script:"doughnutValues-data" }}
+{% endif %}
 
 <script>
-    // Dùng json_script của Django - cách an toàn và sạch nhất
-    const labels = JSON.parse('{{ chart_labels|json_script:"" }}');
-    const luong  = JSON.parse('{{ chart_luong|json_script:"" }}');
-    const hcArr  = JSON.parse('{{ chart_hc|json_script:"" }}');
-    const tcArr  = JSON.parse('{{ chart_tc|json_script:"" }}');
+    const isMonthView = {% if thang %}true{% else %}false{% endif %};
+    const currentYear = "{{ nam|stringformat:'i' }}";
+    const globalDuAnId = "{{ du_an_id }}";
 
-    // Chart Lương
-    new Chart(document.getElementById('chartLuong'), {
-        type: 'bar',
+    function handleRowClick(dateStr, monthVal, rowDuAnId) {
+        // If clicking a row in a specific project table, use that project's ID. Otherwise use the globally selected one (which may be empty).
+        let effectiveDuAnId = rowDuAnId || globalDuAnId;
+        
+        if (isMonthView) {
+            // Hiển thị modal pop-up cho tuần
+            const url = "{% url 'payroll:payroll_sheet' %}?view_type=week&date=" + dateStr + "&du_an_id=" + effectiveDuAnId;
+            document.getElementById('payrollIframe').src = url;
+            document.getElementById('payrollModal').style.display = 'flex';
+        } else {
+            // Clicked a month -> navigate to chi_tieu_tong_hop for that month
+            window.location.href = "?nam=" + currentYear + "&thang=" + monthVal + "&du_an_id=" + effectiveDuAnId;
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('payrollModal').style.display = 'none';
+        document.getElementById('payrollIframe').src = "";
+    }
+
+    {% if period_rows %}
+    const labels = JSON.parse(document.getElementById('labels-data').textContent);
+    const chiTieu  = JSON.parse(document.getElementById('chiTieu-data').textContent);
+    const hcArr  = JSON.parse(document.getElementById('hc-data').textContent);
+    const tcArr  = JSON.parse(document.getElementById('tc-data').textContent);
+    
+    const dLabels = JSON.parse(document.getElementById('doughnutLabels-data').textContent);
+    const dValues = JSON.parse(document.getElementById('doughnutValues-data').textContent);
+
+    Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+    Chart.defaults.color = "#64748b";
+
+    // Chart Chi Tiêu (Line)
+    new Chart(document.getElementById('chartChiTieu'), {
+        type: 'line',
         data: {
             labels: labels,
             datasets: [{
-                label: 'Tổng lương (đ)',
-                data: luong,
-                backgroundColor: 'rgba(234, 88, 12, 0.85)',
-                borderColor: 'rgba(234, 88, 12, 1)',
-                borderWidth: 1,
-                borderRadius: 6,
+                label: 'Tổng Chi Tiêu (đ)',
+                data: chiTieu,
+                backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                borderColor: '#f97316',
+                borderWidth: 3,
+                pointBackgroundColor: '#f97316',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                fill: true,
+                tension: 0.3
             }]
         },
         options: {
@@ -542,19 +806,28 @@
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    titleFont: { size: 14, family: "'Inter', sans-serif" },
+                    bodyFont: { size: 14, family: "'Inter', sans-serif" },
+                    padding: 12,
+                    cornerRadius: 8,
                     callbacks: {
                         label: function(ctx) {
-                            return new Intl.NumberFormat('vi-VN').format(ctx.parsed.y) + ' ₫';
+                            return new Intl.NumberFormat('vi-VN').format(ctx.parsed.y) + ' đ';
                         }
                     }
                 }
             },
             scales: {
+                x: { grid: { display: false } },
                 y: {
                     beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.05)' },
                     ticks: {
                         callback: function(v) {
-                            return new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(v);
+                            if (v >= 1000000) return (v/1000000).toFixed(1) + ' Tr';
+                            if (v >= 1000) return (v/1000).toFixed(0) + ' K';
+                            return v;
                         }
                     }
                 }
@@ -562,52 +835,77 @@
         }
     });
 
-    // Chart Công (HC + TC)
-    new Chart(document.getElementById('chartCong'), {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Ngày công HC',
-                    data: hcArr,
-                    backgroundColor: 'rgba(37, 99, 235, 0.85)',
-                    borderRadius: 4,
-                },
-                {
-                    label: 'Tăng ca TC',
-                    data: tcArr,
-                    backgroundColor: 'rgba(22, 163, 74, 0.8)',
-                    borderRadius: 4,
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'bottom' }
+    // Doughnut Chart if multi-project, else Bar Chart for HC/TC
+    {% if is_multi_project %}
+    if (document.getElementById('chartDoughnut')) {
+        new Chart(document.getElementById('chartDoughnut'), {
+            type: 'doughnut',
+            data: {
+                labels: dLabels,
+                datasets: [{
+                    data: dValues,
+                    backgroundColor: [
+                        '#f97316', '#0ea5e9', '#10b981', '#8b5cf6', '#f43f5e', '#eab308'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
             },
-            scales: {
-                y: { beginAtZero: true }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { boxWidth: 12 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.label + ': ' + new Intl.NumberFormat('vi-VN').format(ctx.parsed) + ' đ';
+                            }
+                        }
+                    }
+                }
             }
-        }
-    });
-
-    // Chuyển tab
-    function showTab(name, btn) {
-        document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        
-        const tab = document.getElementById('tab-' + name);
-        if (tab) tab.style.display = 'block';
-        if (btn) btn.classList.add('active');
+        });
     }
-
-    // Auto active tab đầu tiên khi load
-    document.addEventListener('DOMContentLoaded', function() {
-        const firstBtn = document.querySelector('.tab-btn');
-        if (firstBtn) showTab('tonghop', firstBtn);
-    });
+    {% else %}
+    if (document.getElementById('chartCong')) {
+        new Chart(document.getElementById('chartCong'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'HC',
+                        data: hcArr,
+                        backgroundColor: 'rgba(14, 165, 233, 0.85)',
+                        borderRadius: 4,
+                    },
+                    {
+                        label: 'TC',
+                        data: tcArr,
+                        backgroundColor: 'rgba(16, 185, 129, 0.85)',
+                        borderRadius: 4,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
+                    tooltip: { backgroundColor: 'rgba(15, 23, 42, 0.9)' }
+                },
+                scales: {
+                    x: { grid: { display: false }, stacked: true },
+                    y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, stacked: true }
+                }
+            }
+        });
+    }
+    {% endif %}
+    {% endif %}
 </script>
 {% endblock %}

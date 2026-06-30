@@ -949,6 +949,9 @@ def seniority_table(request):
     return render(request, 'payroll/seniority_table.html', context)
 
 
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+
+@xframe_options_sameorigin
 def payroll_sheet(request, pk=None):
     du_an_id = pk or request.GET.get('du_an_id') or ''
     du_an_id = str(du_an_id).strip() if du_an_id else ''
@@ -2014,44 +2017,73 @@ def api_online_users(request):
  
     return JsonResponse({'users': data, 'count': len(data)})
  
-<<<<<<< HEAD
 
 # --- Thống kê chi tiêu tổng hợp theo dự án, tháng, năm ---
 @allow_viewer
 def chi_tieu_tong_hop(request):
-    from .models import Attendance, CongTrinh
+    from .models import Attendance, CongTrinh, Adjustment
     from collections import defaultdict
     import datetime
     from decimal import Decimal
 
-    period   = request.GET.get('period', 'month')
     du_an_id = request.GET.get('du_an_id', '').strip()
     nam      = request.GET.get('nam', str(datetime.date.today().year))
+    
     try:
         nam = int(nam)
     except ValueError:
         nam = datetime.date.today().year
 
+    if 'thang' not in request.GET:
+        thang = str(datetime.date.today().month)
+    else:
+        thang = request.GET.get('thang', '').strip()
+
+    if thang.lower() in ('all', 'tất cả', ''):
+        thang = ''
+    else:
+        try:
+            thang = int(thang)
+            if not (1 <= thang <= 12): thang = ''
+        except ValueError:
+            thang = ''
+
     all_du_an = CongTrinh.objects.all().order_by('-ngay_bat_dau')
+    du_an_obj = None
+    if du_an_id:
+        du_an_obj = all_du_an.filter(id=du_an_id).first()
 
     SUMMARY_NAMES = [
         'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
         'Người chấm công', 'Cộng', 'Tổng cộng'
     ]
-    att_qs = Attendance.objects.select_related('employee').exclude(
+    att_qs = Attendance.objects.select_related('employee', 'cong_trinh').exclude(
         employee__name__in=SUMMARY_NAMES
     ).filter(date__year=nam)
+    
+    adj_qs = Adjustment.objects.select_related('employee').exclude(
+        employee__name__in=SUMMARY_NAMES
+    ).filter(start_date__year=nam)
+
+    if thang:
+        att_qs = att_qs.filter(date__month=thang)
+        adj_qs = adj_qs.filter(start_date__month=thang)
+
     if du_an_id:
         att_qs = att_qs.filter(cong_trinh_id=du_an_id)
+        emp_ids = set(att_qs.values_list('employee_id', flat=True))
+        adj_qs = adj_qs.filter(employee_id__in=emp_ids)
+
+    def create_period_dict():
+        return {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0'), 'tang_giam': Decimal('0'), 'chi_tieu': Decimal('0'), 'start_date': None, 'thang_val': ''}
+
+    grand_total_data = defaultdict(create_period_dict)
+    projects_data = {}
+    emp_proj_days = defaultdict(lambda: defaultdict(lambda: defaultdict(Decimal)))
 
     rows = att_qs.values(
-        'date', 'employee__id', 'employee__name', 'employee__position',
-        'employee__daily_wage', 'regular_workday', 'overtime_workday',
+        'date', 'regular_workday', 'overtime_workday', 'employee__daily_wage', 'employee_id', 'cong_trinh_id', 'cong_trinh__ten_cong_trinh'
     )
-
-    period_data = defaultdict(lambda: {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0')})
-    nv_data     = defaultdict(lambda: {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0'), 'ten': '', 'nghe': ''})
-    tong_hc = tong_tc = tong_luong = Decimal('0')
 
     for r in rows:
         d     = r['date']
@@ -2059,72 +2091,168 @@ def chi_tieu_tong_hop(request):
         tc    = r['overtime_workday'] or Decimal('0')
         wage  = r['employee__daily_wage'] or Decimal('0')
         luong = hc * wage + tc * (wage / Decimal('8'))
-        emp_id = r['employee__id']
+        
+        emp_id = r['employee_id']
+        proj_id = r['cong_trinh_id']
+        proj_name = r['cong_trinh__ten_cong_trinh']
 
-        if period == 'week':
+        if thang:
             w   = get_week_start(d)
-            key = f"{w.strftime('%d/%m')}–{(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}"
-        elif period == 'month':
-            key = f"Tháng {d.month:02d}/{d.year}"
+            key = f"Tuần: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}"
+            start_d = w
+            thang_val = w.month # fix to week's month or d.month, we will use start_d
         else:
-            key = str(d.year)
+            key = f"Tháng {d.month:02d}/{d.year}"
+            start_d = datetime.date(d.year, d.month, 1)
+            thang_val = d.month
 
-        period_data[key]['hc']    += hc
-        period_data[key]['tc']    += tc
-        period_data[key]['luong'] += luong
-        nv_data[emp_id]['hc']    += hc
-        nv_data[emp_id]['tc']    += tc
-        nv_data[emp_id]['luong'] += luong
-        nv_data[emp_id]['ten']    = r['employee__name']
-        nv_data[emp_id]['nghe']   = r['employee__position'] or ''
-        tong_hc    += hc
-        tong_tc    += tc
-        tong_luong += luong
+        grand_total_data[key]['hc'] += hc
+        grand_total_data[key]['tc'] += tc
+        grand_total_data[key]['luong'] += luong
+        grand_total_data[key]['start_date'] = start_d
+        grand_total_data[key]['thang_val'] = start_d.month
 
-    if period == 'week':
-        def wk(k):
-            try:
-                day, month = k.split('–')[0].split('/')
-                return (int(month), int(day))
-            except Exception:
-                return (0, 0)
-        sorted_periods = sorted(period_data.keys(), key=wk)
-    elif period == 'month':
-        def mk(k):
-            try:
-                parts = k.replace('Tháng ', '').split('/')
-                return (int(parts[1]), int(parts[0]))
-            except Exception:
-                return (0, 0)
-        sorted_periods = sorted(period_data.keys(), key=mk)
-    else:
-        sorted_periods = sorted(period_data.keys())
+        if proj_id not in projects_data:
+            projects_data[proj_id] = {
+                'id': proj_id,
+                'name': proj_name,
+                'periods': defaultdict(create_period_dict),
+                'tong_hc': Decimal('0'),
+                'tong_tc': Decimal('0'),
+                'tong_chi_tieu': Decimal('0'),
+                'tong_tang_giam': Decimal('0'),
+            }
+            
+        projects_data[proj_id]['periods'][key]['hc'] += hc
+        projects_data[proj_id]['periods'][key]['tc'] += tc
+        projects_data[proj_id]['periods'][key]['luong'] += luong
+        projects_data[proj_id]['periods'][key]['start_date'] = start_d
+        projects_data[proj_id]['periods'][key]['thang_val'] = start_d.month
+        
+        emp_proj_days[key][emp_id][proj_id] += (hc + tc)
 
-    chart_labels = sorted_periods
-    chart_luong  = [float(period_data[k]['luong']) for k in sorted_periods]
-    chart_hc     = [float(period_data[k]['hc'])    for k in sorted_periods]
-    chart_tc     = [float(period_data[k]['tc'])    for k in sorted_periods]
+    adj_rows = adj_qs.values('start_date', 'amount', 'employee_id')
+    for r in adj_rows:
+        d = r['start_date']
+        amt = r['amount'] or Decimal('0')
+        emp_id = r['employee_id']
 
-    nv_list = sorted(nv_data.values(), key=lambda x: x['luong'], reverse=True)
+        if thang:
+            w   = get_week_start(d)
+            key = f"Tuần: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}"
+            start_d = w
+        else:
+            key = f"Tháng {d.month:02d}/{d.year}"
+            start_d = datetime.date(d.year, d.month, 1)
 
-    period_rows = [
-        {'label': k, 'hc': period_data[k]['hc'], 'tc': period_data[k]['tc'], 'luong': period_data[k]['luong']}
-        for k in sorted_periods
-    ]
+        if key not in grand_total_data:
+            grand_total_data[key]['start_date'] = start_d
+            grand_total_data[key]['thang_val'] = start_d.month
+        grand_total_data[key]['tang_giam'] += amt
+        
+        best_proj = None
+        if key in emp_proj_days and emp_id in emp_proj_days[key]:
+            best_proj = max(emp_proj_days[key][emp_id].items(), key=lambda x: x[1])[0]
+        else:
+            best_proj = du_an_id if du_an_id else None
+            
+        if best_proj and best_proj in projects_data:
+            projects_data[best_proj]['periods'][key]['tang_giam'] += amt
 
-    years_qs  = Attendance.objects.dates('date', 'year')
-    all_years = sorted(set(d.year for d in years_qs), reverse=True) or [datetime.date.today().year]
+    grand_tong_hc = grand_tong_tc = grand_tong_luong = grand_tong_tang_giam = grand_tong_chi_tieu = Decimal('0')
+    sorted_grand_keys = sorted(grand_total_data.keys(), key=lambda k: grand_total_data[k]['start_date'] or datetime.date.min)
+    
+    grand_period_rows = []
+    for key in sorted_grand_keys:
+        d = grand_total_data[key]
+        d['chi_tieu'] = d['luong'] + d['tang_giam']
+        grand_tong_hc += d['hc']
+        grand_tong_tc += d['tc']
+        grand_tong_luong += d['luong']
+        grand_tong_tang_giam += d['tang_giam']
+        grand_tong_chi_tieu += d['chi_tieu']
+        grand_period_rows.append({
+            'period_name': key,
+            'start_date': d['start_date'],
+            'thang_val': d['thang_val'],
+            'hc': float(d['hc']),
+            'tc': float(d['tc']),
+            'luong': float(d['luong']),
+            'tang_giam': float(d['tang_giam']),
+            'chi_tieu': float(d['chi_tieu']),
+        })
 
+    final_projects = []
+    for pid, pdata in projects_data.items():
+        sorted_p_keys = sorted(pdata['periods'].keys(), key=lambda k: pdata['periods'][k]['start_date'] or datetime.date.min)
+        p_rows = []
+        p_tong_hc = p_tong_tc = p_tong_luong = p_tong_tang_giam = p_tong_chi_tieu = Decimal('0')
+        for key in sorted_p_keys:
+            d = pdata['periods'][key]
+            d['chi_tieu'] = d['luong'] + d['tang_giam']
+            p_tong_hc += d['hc']
+            p_tong_tc += d['tc']
+            p_tong_luong += d['luong']
+            p_tong_tang_giam += d['tang_giam']
+            p_tong_chi_tieu += d['chi_tieu']
+            p_rows.append({
+                'period_name': key,
+                'start_date': d['start_date'],
+                'thang_val': d['thang_val'],
+                'hc': float(d['hc']),
+                'tc': float(d['tc']),
+                'luong': float(d['luong']),
+                'tang_giam': float(d['tang_giam']),
+                'chi_tieu': float(d['chi_tieu']),
+            })
+            
+        pdata['rows'] = p_rows
+        pdata['tong_hc'] = float(p_tong_hc)
+        pdata['tong_tc'] = float(p_tong_tc)
+        pdata['tong_luong'] = float(p_tong_luong)
+        pdata['tong_tang_giam'] = float(p_tong_tang_giam)
+        pdata['tong_chi_tieu'] = float(p_tong_chi_tieu)
+        final_projects.append(pdata)
+
+    final_projects.sort(key=lambda x: x['tong_chi_tieu'], reverse=True)
+
+    chart_labels = [r['period_name'] for r in grand_period_rows]
+    chart_luong = [r['chi_tieu'] for r in grand_period_rows]
+    chart_hc = [r['hc'] for r in grand_period_rows]
+    chart_tc = [r['tc'] for r in grand_period_rows]
+
+    doughnut_labels = [p['name'] for p in final_projects]
+    doughnut_data = [p['tong_chi_tieu'] for p in final_projects]
+
+    all_years = list(range(2023, datetime.date.today().year + 2))
+    
     context = {
-        'period': period, 'du_an_id': du_an_id, 'nam': nam,
-        'all_du_an': all_du_an, 'all_years': all_years,
-        'period_rows': period_rows, 'nv_list': nv_list,
-        'tong_hc': tong_hc, 'tong_tc': tong_tc, 'tong_luong': tong_luong,
-        'chart_labels': chart_labels, 'chart_luong': chart_luong,
-        'chart_hc': chart_hc, 'chart_tc': chart_tc,
-        'du_an_obj': CongTrinh.objects.filter(id=du_an_id).first() if du_an_id else None,
+        'du_an_id': du_an_id,
+        'du_an_obj': du_an_obj,
+        'all_du_an': all_du_an,
+        'nam': nam,
+        'thang': thang,
+        'all_years': all_years,
+        
+        'period_rows': grand_period_rows,
+        'tong_hc': float(grand_tong_hc),
+        'tong_tc': float(grand_tong_tc),
+        'tong_luong': float(grand_tong_luong),
+        'tong_tang_giam': float(grand_tong_tang_giam),
+        'tong_chi_tieu': float(grand_tong_chi_tieu),
+        
+        'projects_data': final_projects,
+        'is_multi_project': not bool(du_an_id),
+        
+        'chart_labels': chart_labels,
+        'chart_luong': chart_luong,
+        'chart_hc': chart_hc,
+        'chart_tc': chart_tc,
+        'doughnut_labels': doughnut_labels,
+        'doughnut_data': doughnut_data,
     }
     return render(request, 'payroll/chi_tieu_tong_hop.html', context)
+
 
 
 def chi_tieu_export_excel(request):
@@ -2367,5 +2495,3 @@ def chi_tieu_export_excel(request):
 
     wb.save(response)
     return response
-=======
->>>>>>> e2a5fda4d7649e45576d59307af8ec2c3e14a371
