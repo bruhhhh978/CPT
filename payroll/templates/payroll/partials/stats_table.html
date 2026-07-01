@@ -1,0 +1,44 @@
+{# partials/stats_table.html - Bảng tổng hợp công/lương/thống kê tuần #}
+{% load humanize %}
+<div class="card">
+    <div class="section-heading">
+        <div>
+            <h3>Bảng thống kê tuần</h3>
+            <p>Tổng hợp nhanh công, tăng ca, điều chỉnh và số tiền thực nhận.</p>
+        </div>
+    </div>
+    <div class="table-container employee-list-table-container statistics-table-container">
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>STT</th><th>Nhân viên</th><th>Nghề</th>
+                    <th>Tổng HC</th><th>Tổng TC</th><th>Điều chỉnh</th><th>Tổng lãnh</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in payroll_data %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ row.employee.name }}</td>
+                    <td>{{ row.employee.position }}</td>
+                    <td>{{ row.total_hc|floatformat:"0" }}</td>
+                    <td>{{ row.total_tc|floatformat:"0" }}</td>
+                    <td>{{ row.adjustment|floatformat:0|intcomma }} đ</td>
+                    <td class="total-col">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="empty-state-cell">Không có dữ liệu.</td></tr>
+                {% endfor %}
+                {% if payroll_data %}
+                <tr class="summary-row" style="font-weight:700;background:var(--surface,#fff8f0);border-top:2px solid var(--primary);">
+                    <td colspan="3" style="text-align:center;color:var(--primary);"><i class="fas fa-sigma"></i> TỔNG CỘNG</td>
+                    <td style="color:var(--primary);">{{ total_hc|floatformat:"0" }}</td>
+                    <td>{{ total_tc|floatformat:"0" }}</td>
+                    <td>—</td>
+                    <td style="color:var(--primary);">{{ total_pay|floatformat:0|intcomma }} đ</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>

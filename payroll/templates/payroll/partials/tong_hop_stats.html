@@ -1,0 +1,20 @@
+
+{% load humanize %}
+<div class="th-stats">
+    <div class="th-stat">
+        <span class="label">Số nhân viên</span>
+        <strong class="value">{{ so_nv }}</strong>
+    </div>
+    <div class="th-stat">
+        <span class="label">Số tuần</span>
+        <strong class="value">{{ tuan_cols|length }}</strong>
+    </div>
+    <div class="th-stat">
+        <span class="label">Tổng công (HC)</span>
+        <strong class="value">{{ grand_cong|floatformat:"0" }}</strong>
+    </div>
+    <div class="th-stat accent">
+        <span class="label">Tổng chi lương</span>
+        <strong class="value" style="font-size:1.1rem;">{{ grand_luong|floatformat:0|intcomma }} đ</strong>
+    </div>
+</div>

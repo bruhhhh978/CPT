@@ -1,0 +1,61 @@
+
+<div class="date-pill">
+    <select id="view-type-select" title="Chọn kiểu lọc">
+        <option value="week"  {% if view_type == 'week'  %}selected{% endif %}>Tuần</option>
+        <option value="month" {% if view_type == 'month' %}selected{% endif %}>Tháng</option>
+    </select>
+    <select id="period-select" class="period-select" title="Chọn kỳ">
+        {% if view_type == 'month' %}
+            {% for m in available_months %}
+            <option value="{{ m.date_str }}"
+                {% if target_date|date:'Y' == m.year|stringformat:'s' and target_date|date:'n' == m.month|stringformat:'s' %}selected{% endif %}>
+                {{ m.label }}
+            </option>
+            {% endfor %}
+        {% else %}
+            {% for w in available_weeks %}
+            <option value="{{ w.date_str }}"
+                {% if start_date == w.start %}selected{% endif %}>
+                {{ w.label }}
+            </option>
+            {% endfor %}
+        {% endif %}
+    </select>
+</div>
+<a href="#" id="btn-prev" class="nav-btn" title="Kỳ trước"><i class="fas fa-chevron-left"></i></a>
+<a href="#" id="btn-next" class="nav-btn" title="Kỳ sau"><i class="fas fa-chevron-right"></i></a>
+
+<script>
+(function() {
+    const viewSel   = document.getElementById('view-type-select');
+    const periodSel = document.getElementById('period-select');
+    if (!viewSel || !periodSel) return;
+
+    function goToPeriod(dateStr, viewType) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('date', dateStr);
+        params.set('view_type', viewType);
+        params.delete('export');
+        window.location.href = '?' + params.toString();
+    }
+
+    viewSel.addEventListener('change', function () {
+        const params = new URLSearchParams(window.location.search);
+        params.set('view_type', this.value);
+        params.set('date', '{{ start_date|date:"Y-m-d" }}');
+        params.delete('export');
+        window.location.href = '?' + params.toString();
+    });
+    periodSel.addEventListener('change', function () {
+        goToPeriod(this.value, viewSel.value);
+    });
+    document.getElementById('btn-prev').addEventListener('click', function (e) {
+        e.preventDefault();
+        if (periodSel.selectedIndex > 0) { periodSel.selectedIndex--; goToPeriod(periodSel.value, viewSel.value); }
+    });
+    document.getElementById('btn-next').addEventListener('click', function (e) {
+        e.preventDefault();
+        if (periodSel.selectedIndex < periodSel.options.length - 1) { periodSel.selectedIndex++; goToPeriod(periodSel.value, viewSel.value); }
+    });
+})();
+</script>

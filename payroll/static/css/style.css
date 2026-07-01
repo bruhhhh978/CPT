@@ -438,8 +438,8 @@ td {
     background: rgba(255, 255, 255, 0.95);
     text-align: left;
     padding-left: 10px;
-    width: 160px;
-    min-width: 160px;
+    width: 260px;
+    min-width: 260px;
 }
 
 .position-col {
@@ -726,6 +726,48 @@ tr:hover td {
 .stats-table th,
 .stats-table td {
     text-align: left;
+}
+
+.employee-list-table-container {
+    max-height: 586px;
+    overflow: auto !important;
+    overscroll-behavior: contain;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.96);
+}
+
+.employee-list-table-container table {
+    margin-top: 0;
+}
+
+.employee-list-table-container thead th {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: #fff7ed;
+    box-shadow: 0 1px 0 var(--border);
+}
+
+.employee-list-table-container tbody tr.summary-row td {
+    position: sticky;
+    bottom: 0;
+    z-index: 45;
+    background: var(--surface, #fff8f0) !important;
+    box-shadow: 0 -2px 0 var(--primary), 0 -8px 18px rgba(15, 23, 42, 0.12);
+}
+
+.statistics-table-container .stats-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: #fff7ed;
+}
+
+.statistics-table-container .stats-table tbody tr.summary-row td {
+    position: sticky;
+    bottom: 0;
+    z-index: 55;
+    background: var(--surface, #fff8f0) !important;
 }
 
 .empty-state-cell {

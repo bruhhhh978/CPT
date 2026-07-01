@@ -1,0 +1,22 @@
+{# partials/modal_import_excel.html - Modal nhập file Excel #}
+{% if can_edit %}
+<div id="import-excel-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Nhập Dữ Liệu Từ Excel</h2>
+            <button onclick="document.getElementById('import-excel-modal').style.display='none'" class="btn btn-close">&times;</button>
+        </div>
+        <form action="{% url 'payroll:import_excel' %}" method="POST" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
+            <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
+            <div class="form-group">
+                <label>Chọn file Excel (.xlsx)</label>
+                <input type="file" name="excel_file" accept=".xlsx" required class="form-input">
+            </div>
+            <p class="form-hint">* File Excel phải đúng định dạng đã xuất từ hệ thống.</p>
+            <button type="submit" class="btn btn-primary" style="width:100%;">TẢI LÊN & CẬP NHẬT</button>
+        </form>
+    </div>
+</div>
+{% endif %}

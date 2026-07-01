@@ -1,0 +1,17 @@
+{# partials/payroll_summary_row.html - Hàng TỔNG CỘNG cuối bảng chấm công #}
+{% load humanize %}
+<tr class="summary-row" style="font-weight:700;background:var(--surface,#fff8f0);border-top:2px solid var(--primary);">
+    <td colspan="3" style="text-align:center;color:var(--primary);">
+        <i class="fas fa-sigma"></i> TỔNG CỘNG
+    </td>
+    {% for sd in summary_daily %}
+    <td class="hc-col" style="color:var(--primary);">{{ sd.hc|floatformat:"0" }}</td>
+    <td class="tc-col" style="color:#888;">{% if sd.tc %}{{ sd.tc|floatformat:"0" }}{% endif %}</td>
+    {% endfor %}
+    <td class="total-hc-col" style="color:var(--primary);">{{ summary_total_hc|floatformat:"0" }}</td>
+    <td class="total-tc-col">{{ summary_total_tc|floatformat:"0" }}</td>
+    <td class="wage-col">—</td>
+    <td class="adj-col">—</td>
+    <td class="total-pay-col" style="color:var(--primary);">{{ summary_total_pay|floatformat:0|intcomma }} đ</td>
+    <td class="actions-col">—</td>
+</tr>

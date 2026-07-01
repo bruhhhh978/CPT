@@ -1,0 +1,74 @@
+
+{% load humanize %}
+<div class="th-table-outer">
+    <div class="th-table-wrap">
+        <table class="th-table" id="main-table">
+            <thead>
+                <tr>
+                    <th rowspan="2" style="width:36px;">STT</th>
+                    <th rowspan="2" style="min-width:140px; text-align:left;">Họ và tên</th>
+                    <th rowspan="2">Nghề</th>
+                    <th rowspan="2" class="luong-col">Lương ngày</th>
+                    {% for t in tuan_cols %}
+                    <th class="wk-cell">{{ t.label }}</th>
+                    {% endfor %}
+                    <th rowspan="2" style="background:#fefce8; color:#713f12; min-width:55px; border-left:2px solid #fbbf24;">Tổng<br>công</th>
+                    <th rowspan="2" class="luong-col" style="background:#fff7ed; color:#7c2d12; min-width:100px; border-left:2px solid #fed7aa;">Tổng lương</th>
+                </tr>
+                <tr>
+                    {% for t in tuan_cols %}
+                    <th class="wk-cell" title="{{ t.date }}">{{ t.date }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                {% for emp in employees %}
+                <tr class="emp-row" data-name="{{ emp.ten|lower }}" data-nghe="{{ emp.nghe }}">
+                    <td style="color:var(--text-muted,#9ca3af);">{{ forloop.counter }}</td>
+                    <td>{{ emp.ten }}</td>
+                    <td>
+                        {% if   emp.nghe == 'Cai' %}<span class="nghe-badge cai">Cai</span>
+                        {% elif emp.nghe == 'Thợ' %}<span class="nghe-badge tho">Thợ</span>
+                        {% elif emp.nghe == 'Phụ' %}<span class="nghe-badge phu">Phụ</span>
+                        {% elif emp.nghe == 'ĐN'  %}<span class="nghe-badge dn">ĐN</span>
+                        {% else %}{{ emp.nghe }}{% endif %}
+                    </td>
+                    <td class="luong-col">{{ emp.luong_ngay|intcomma }}</td>
+                    {% for val in emp.week_vals %}
+                    <td class="wk-cell">
+                        {% if val %}<span class="wk-val">{{ val|floatformat:"0" }}</span>
+                        {% else %}<span class="wk-zero">—</span>{% endif %}
+                    </td>
+                    {% endfor %}
+                    <td style="font-weight:800; color:#b45309; border-left:2px solid #fbbf24;">
+                        {% if emp.tong_cong %}{{ emp.tong_cong|floatformat:"0" }}{% else %}—{% endif %}
+                    </td>
+                    <td class="luong-col" style="border-left:2px solid #86efac;">
+                        {{ emp.tong_luong|floatformat:0|intcomma }} đ
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{{ tuan_cols|length|add:6 }}" style="text-align:center; padding:2rem; color:var(--text-muted,#6b7280);">
+                        Không có dữ liệu
+                    </td>
+                </tr>
+                {% endfor %}
+
+                {% if employees %}
+                <tr class="tong-row" id="total-row">
+                    <td colspan="3" style="text-align:center; font-weight:800;">∑ TỔNG CỘNG</td>
+                    <td class="luong-col">—</td>
+                    {% for total in col_totals %}
+                    <td class="wk-cell">
+                        <strong>{% if total %}{{ total|floatformat:"0" }}{% else %}—{% endif %}</strong>
+                    </td>
+                    {% endfor %}
+                    <td style="font-weight:900; color:#b45309; border-left:2px solid #fbbf24;">{{ grand_cong|floatformat:"0" }}</td>
+                    <td class="luong-col" style="border-left:2px solid #86efac;">{{ grand_luong|floatformat:0|intcomma }} đ</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>

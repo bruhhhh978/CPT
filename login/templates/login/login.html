@@ -1,7 +1,6 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,606 +10,126 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        *, *::before, *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
-            --primary:   #f97316;
-            --primary-dark: #ea6a0a;
-            --success:   #22c55e;
-            --warning:   #f59e0b;
-            --danger:    #ef4444;
-            --bg:        #0f172a;
-            --surface:   #1e293b;
-            --surface-2: #273549;
-            --border:    rgba(255,255,255,0.08);
-            --text:      #f1f5f9;
-            --text-muted:#94a3b8;
+            --primary: #f97316; --primary-dark: #ea6a0a;
+            --bg: #0f172a; --surface: #1e293b; --surface-2: #273549;
+            --border: rgba(255,255,255,0.08);
+            --text: #f1f5f9; --text-muted: #94a3b8;
         }
-
         body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
+            font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text);
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            overflow: hidden; position: relative;
         }
-
-        /* ── Animated background (matches base.html feel) ── */
         body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
+            content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
             background:
                 radial-gradient(ellipse 80% 60% at 20% 10%, rgba(249,115,22,0.18) 0%, transparent 60%),
                 radial-gradient(ellipse 60% 50% at 85% 80%, rgba(14,165,233,0.12) 0%, transparent 55%),
                 radial-gradient(ellipse 40% 40% at 50% 50%, rgba(249,115,22,0.05) 0%, transparent 70%);
-            pointer-events: none;
-            z-index: 0;
             animation: bgShift 12s ease-in-out infinite alternate;
         }
-
-        @keyframes bgShift {
-            from { opacity: 0.8; transform: scale(1); }
-            to   { opacity: 1;   transform: scale(1.04); }
-        }
-
-        /* Geometric grid lines */
+        @keyframes bgShift { from { opacity: 0.8; transform: scale(1); } to { opacity: 1; transform: scale(1.04); } }
         body::after {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background-image:
-                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+            background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
             background-size: 48px 48px;
-            pointer-events: none;
-            z-index: 0;
         }
-
-        /* ── Layout wrapper ── */
         .login-shell {
-            position: relative;
-            z-index: 1;
-            display: flex;
-            width: min(900px, 96vw);
-            min-height: 520px;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow:
-                0 0 0 1px var(--border),
-                0 32px 80px rgba(0,0,0,0.55),
-                0 0 60px rgba(249,115,22,0.08);
+            position: relative; z-index: 1; display: flex; width: min(900px, 96vw);
+            min-height: 520px; border-radius: 20px; overflow: hidden;
+            box-shadow: 0 0 0 1px var(--border), 0 32px 80px rgba(0,0,0,0.55), 0 0 60px rgba(249,115,22,0.08);
             animation: slideUp 0.6s cubic-bezier(.22,.68,0,1.2) both;
         }
-
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(36px) scale(0.97); }
-            to   { opacity: 1; transform: none; }
-        }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(36px) scale(0.97); } to { opacity: 1; transform: none; } }
 
         /* ── Left brand panel ── */
         .brand-panel {
-            flex: 1;
-            background: linear-gradient(145deg, #1a2540 0%, #0f1c35 60%, #0a1525 100%);
-            padding: 3rem 2.5rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            border-right: 1px solid var(--border);
-            position: relative;
-            overflow: hidden;
+            flex: 1; background: linear-gradient(145deg, #1a2540 0%, #0f1c35 60%, #0a1525 100%);
+            padding: 3rem 2.5rem; display: flex; flex-direction: column; justify-content: space-between;
+            border-right: 1px solid var(--border); position: relative; overflow: hidden;
         }
-
-        .brand-panel::before {
-            content: '';
-            position: absolute;
-            bottom: -60px;
-            right: -60px;
-            width: 280px;
-            height: 280px;
-            border-radius: 50%;
-            border: 1px solid rgba(249,115,22,0.15);
-            pointer-events: none;
-        }
-
-        .brand-panel::after {
-            content: '';
-            position: absolute;
-            bottom: -20px;
-            right: -20px;
-            width: 180px;
-            height: 180px;
-            border-radius: 50%;
-            border: 1px solid rgba(249,115,22,0.25);
-            pointer-events: none;
-        }
-
-        .brand-logo {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .brand-logo .logo-icon {
-            width: 44px;
-            height: 44px;
-            background: var(--primary);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2rem;
-            color: white;
-            box-shadow: 0 4px 16px rgba(249,115,22,0.4);
-            flex-shrink: 0;
-        }
-
-        .brand-logo .logo-text {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 1.5rem;
-            letter-spacing: 0.08em;
-            color: var(--text);
-            line-height: 1.1;
-        }
-
-        .brand-logo .logo-sub {
-            font-size: 0.68rem;
-            color: var(--text-muted);
-            font-weight: 400;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-        }
-
-        .brand-headline {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: 2rem 0;
-        }
-
-        .brand-headline h2 {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: clamp(2.2rem, 4vw, 2.9rem);
-            letter-spacing: 0.12em;
-            line-height: 1.1;
-            color: var(--text);
-            text-shadow: 0 2px 12px rgba(0,0,0,0.4);
-        }
-
-        .brand-headline h2 span {
-            color: var(--primary);
-        }
-
-        .brand-headline p {
-            margin-top: 1rem;
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            line-height: 1.7;
-            max-width: 240px;
-        }
-
-        .brand-features {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-
-        .feature-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
-
-        .feature-item i {
-            color: var(--primary);
-            width: 16px;
-            text-align: center;
-        }
+        .brand-panel::before { content: ''; position: absolute; bottom: -60px; right: -60px; width: 280px; height: 280px; border-radius: 50%; border: 1px solid rgba(249,115,22,0.15); pointer-events: none; }
+        .brand-panel::after  { content: ''; position: absolute; bottom: -20px; right: -20px; width: 180px; height: 180px; border-radius: 50%; border: 1px solid rgba(249,115,22,0.25); pointer-events: none; }
+        .brand-logo { display: flex; align-items: center; gap: 0.75rem; }
+        .brand-logo .logo-icon { width: 44px; height: 44px; background: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; color: white; box-shadow: 0 4px 16px rgba(249,115,22,0.4); flex-shrink: 0; }
+        .brand-logo .logo-text { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: 0.08em; color: var(--text); line-height: 1.1; }
+        .brand-logo .logo-sub { font-size: 0.68rem; color: var(--text-muted); font-weight: 400; letter-spacing: 0.05em; text-transform: uppercase; }
+        .brand-headline { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 2rem 0; }
+        .brand-headline h2 { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.2rem,4vw,2.9rem); letter-spacing: 0.12em; line-height: 1.1; color: var(--text); text-shadow: 0 2px 12px rgba(0,0,0,0.4); }
+        .brand-headline h2 span { color: var(--primary); }
+        .brand-headline p { margin-top: 1rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.7; max-width: 240px; }
+        .brand-features { display: flex; flex-direction: column; gap: 0.75rem; }
+        .feature-item { display: flex; align-items: center; gap: 0.75rem; font-size: 0.8rem; color: var(--text-muted); }
+        .feature-item i { color: var(--primary); width: 16px; text-align: center; }
 
         /* ── Right login panel ── */
-        .login-panel {
-            width: 380px;
-            flex-shrink: 0;
-            background: var(--surface);
-            padding: 3rem 2.5rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
+        .login-panel { width: 380px; flex-shrink: 0; background: var(--surface); padding: 3rem 2.5rem; display: flex; flex-direction: column; justify-content: center; }
+        .login-panel h3 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--text); }
+        .login-panel .login-sub { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 2rem; }
 
-        .login-panel h3 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-bottom: 0.4rem;
-            color: var(--text);
-        }
+        .alert-error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; border-radius: 10px; padding: 0.75rem 1rem; font-size: 0.82rem; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem; animation: shake 0.4s ease; }
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
 
-        .login-panel .login-sub {
-            font-size: 0.82rem;
-            color: var(--text-muted);
-            margin-bottom: 2rem;
-        }
-
-        /* Error message */
-        .alert-error {
-            background: rgba(239,68,68,0.12);
-            border: 1px solid rgba(239,68,68,0.35);
-            color: #fca5a5;
-            border-radius: 10px;
-            padding: 0.75rem 1rem;
-            font-size: 0.82rem;
-            margin-bottom: 1.25rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            animation: shake 0.4s ease;
-        }
-
-        @keyframes shake {
-            0%,100% { transform: translateX(0); }
-            25%      { transform: translateX(-6px); }
-            75%      { transform: translateX(6px); }
-        }
-
-        /* Form */
-        .form-group {
-            margin-bottom: 1.25rem;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 0.78rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            margin-bottom: 0.5rem;
-        }
-
-        .input-wrap {
-            position: relative;
-        }
-
-        .input-wrap i {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            pointer-events: none;
-            transition: color 0.2s;
-        }
-
-        .input-wrap input {
-            width: 100%;
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 0.75rem 1rem 0.75rem 2.75rem;
-            font-size: 0.9rem;
-            color: var(--text);
-            font-family: 'Inter', sans-serif;
-            outline: none;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .input-wrap input::placeholder {
-            color: var(--text-muted);
-            opacity: 0.7;
-        }
-
-        .input-wrap input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(249,115,22,0.18);
-        }
-
-        .input-wrap input:focus + i,
-        .input-wrap:focus-within i {
-            color: var(--primary);
-        }
-
-        /* Toggle mật khẩu */
-        .toggle-pw {
-            position: absolute;
-            right: 0.9rem;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 0.85rem;
-            padding: 0.25rem;
-            transition: color 0.2s;
-        }
-
+        .form-group { margin-bottom: 1.25rem; }
+        .form-group label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.5rem; }
+        .input-wrap { position: relative; }
+        .input-wrap i { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem; pointer-events: none; transition: color 0.2s; }
+        .input-wrap input { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 0.75rem 1rem 0.75rem 2.75rem; font-size: 0.9rem; color: var(--text); font-family: 'Inter', sans-serif; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+        .input-wrap input::placeholder { color: var(--text-muted); opacity: 0.7; }
+        .input-wrap input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(249,115,22,0.18); }
+        .input-wrap:focus-within i { color: var(--primary); }
+        .toggle-pw { position: absolute; right: 0.9rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; padding: 0.25rem; transition: color 0.2s; }
         .toggle-pw:hover { color: var(--primary); }
 
-        /* Remember & forgot */
-        .form-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 1.5rem;
-            font-size: 0.8rem;
-        }
+        .form-footer { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; font-size: 0.8rem; }
+        .remember-wrap { display: flex; align-items: center; gap: 0.5rem; color: var(--text-muted); cursor: pointer; user-select: none; }
+        .remember-wrap input[type="checkbox"] { accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer; }
+        .forgot-link { color: var(--primary); text-decoration: none; font-weight: 600; }
+        .forgot-link:hover { text-decoration: underline; }
 
-        .remember-wrap {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: var(--text-muted);
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .remember-wrap input[type="checkbox"] {
-            accent-color: var(--primary);
-            width: 15px;
-            height: 15px;
-            cursor: pointer;
-        }
-
-        .forgot-link {
-            color: var(--primary);
-            text-decoration: none;
-            font-weight: 600;
-        }
-
-        .forgot-link:hover {
-            text-decoration: underline;
-        }
-
-        /* Submit button */
-        .btn-login {
-            width: 100%;
-            padding: 0.85rem 1.5rem;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 0.9rem;
-            font-weight: 700;
-            font-family: 'Inter', sans-serif;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-            box-shadow: 0 4px 20px rgba(249,115,22,0.35);
-        }
-
-        .btn-login:hover {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
-            box-shadow: 0 8px 28px rgba(249,115,22,0.45);
-        }
-
-        .btn-login:active {
-            transform: translateY(0);
-        }
-
-        .btn-login.loading {
-            pointer-events: none;
-            opacity: 0.8;
-        }
-
-        /* Spinner */
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .spinner {
-            display: none;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255,255,255,0.35);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-        }
-
+        .btn-login { width: 100%; padding: 0.85rem 1.5rem; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 700; font-family: 'Inter', sans-serif; letter-spacing: 0.05em; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; transition: background 0.2s, transform 0.15s, box-shadow 0.2s; box-shadow: 0 4px 20px rgba(249,115,22,0.35); }
+        .btn-login:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 8px 28px rgba(249,115,22,0.45); }
+        .btn-login:active { transform: translateY(0); }
+        .btn-login.loading { pointer-events: none; opacity: 0.8; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { display: none; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.35); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
         .btn-login.loading .spinner { display: block; }
         .btn-login.loading .btn-label { display: none; }
 
-        /* Divider */
-        .divider {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin: 1.5rem 0 1rem;
-        }
-
-        .divider span {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-            white-space: nowrap;
-        }
-
-        .divider::before,
-        .divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--border);
-        }
-
-        /* Back link */
-        .back-link {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.4rem;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
+        .divider { display: flex; align-items: center; gap: 0.75rem; margin: 1.5rem 0 1rem; }
+        .divider span { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+        .back-link { display: flex; align-items: center; justify-content: center; gap: 0.4rem; font-size: 0.8rem; color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
         .back-link:hover { color: var(--primary); }
 
-        /* ── Responsive ── */
-        @media (max-width: 640px) {
-            .brand-panel { display: none; }
-            .login-panel { width: 100%; padding: 2.5rem 1.75rem; }
-            .login-shell { min-height: auto; border-radius: 16px; }
-        }
+        @media (max-width: 640px) { .brand-panel { display: none; } .login-panel { width: 100%; padding: 2.5rem 1.75rem; } .login-shell { min-height: auto; border-radius: 16px; } }
     </style>
 </head>
-
 <body>
     <div class="login-shell">
 
-        <!-- Left brand panel -->
-        <div class="brand-panel">
-            <div class="brand-logo">
-                <div class="logo-icon">
-                    <i class="fas fa-hard-hat"></i>
-                </div>
-                <div>
-                    <div class="logo-text">CPT</div>
-                    <div class="logo-sub">Công ty TNHH Xây Dựng</div>
-                </div>
-            </div>
+        {# ── PARTIAL: Brand panel trái ── #}
+        {% include "login/partials/brand_panel.html" %}
 
-            <div class="brand-headline">
-                <h2>HỆ THỐNG<br>CHẤM CÔNG &amp;<br><span>TÍNH LƯƠNG</span></h2>
-                <p>Quản lý nhân công, chấm công hằng tuần và tính lương nhanh chóng, chính xác.</p>
-            </div>
+        {# ── PARTIAL: Form đăng nhập phải ── #}
+        {% include "login/partials/login_form.html" %}
 
-            <div class="brand-features">
-                <div class="feature-item">
-                    <i class="fas fa-calendar-check"></i>
-                    <span>Chấm công theo tuần, HC &amp; TC</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-file-excel"></i>
-                    <span>Xuất / nhập bảng lương Excel</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-chart-column"></i>
-                    <span>Thống kê biểu đồ trực quan</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-shield-halved"></i>
-                    <span>Bảo mật theo tài khoản</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Right login panel -->
-        <div class="login-panel">
-            <h3>Đăng nhập</h3>
-            <p class="login-sub">Vui lòng đăng nhập để tiếp tục quản lý.</p>
-
-            {% if messages %}
-            {% for message in messages %}
-            <div class="alert-error">
-                <i class="fas fa-circle-exclamation"></i>
-                {{ message }}
-            </div>
-            {% endfor %}
-            {% endif %}
-
-            <!-- Static error example (remove when wired to Django) -->
-            <!-- <div class="alert-error">
-                <i class="fas fa-circle-exclamation"></i>
-                Tên đăng nhập hoặc mật khẩu không đúng.
-            </div> -->
-
-            <form method="POST" action="/login/" id="loginForm">
-                {% csrf_token %}
-
-                <div class="form-group">
-                    <label>Tên đăng nhập</label>
-                    <div class="input-wrap">
-                        <i class="fas fa-user"></i>
-                        <input
-                            type="text"
-                            name="username"
-                            id="username"
-                            placeholder="Nhập tên đăng nhập"
-                            autocomplete="username"
-                            required
-                            autofocus
-                        >
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Mật khẩu</label>
-                    <div class="input-wrap">
-                        <i class="fas fa-lock"></i>
-                        <input
-                            type="password"
-                            name="password"
-                            id="password"
-                            placeholder="Nhập mật khẩu"
-                            autocomplete="current-password"
-                            required
-                        >
-                        <button type="button" class="toggle-pw" id="togglePw" aria-label="Hiện/ẩn mật khẩu">
-                            <i class="fas fa-eye" id="togglePwIcon"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="form-footer">
-                    <label class="remember-wrap">
-                        <input type="checkbox" name="remember" id="remember">
-                        Ghi nhớ đăng nhập
-                    </label>
-                    <a href="/forgot-password/" class="forgot-link">Quên mật khẩu?</a>
-                </div>
-
-                <button type="submit" class="btn-login" id="loginBtn">
-                    <span class="btn-label"><i class="fas fa-right-to-bracket"></i> ĐĂNG NHẬP</span>
-                    <div class="spinner"></div>
-                </button>
-            </form>
-
-            <div class="divider"><span>hoặc</span></div>
-
-            <a href="{% url 'payroll:payroll_sheet' %}" class="back-link">
-                <i class="fas fa-arrow-left"></i> Quay về trang chủ
-            </a>
-        </div>
     </div>
 
     <script>
-        // Toggle show/hide password
         const toggleBtn = document.getElementById('togglePw');
         const pwInput   = document.getElementById('password');
         const pwIcon    = document.getElementById('togglePwIcon');
-
         toggleBtn.addEventListener('click', () => {
             const isHidden = pwInput.type === 'password';
             pwInput.type   = isHidden ? 'text' : 'password';
             pwIcon.className = isHidden ? 'fas fa-eye-slash' : 'fas fa-eye';
         });
-
-        // Loading state on submit
         const form     = document.getElementById('loginForm');
         const loginBtn = document.getElementById('loginBtn');
-
-        form.addEventListener('submit', () => {
-            loginBtn.classList.add('loading');
-        });
+        form.addEventListener('submit', () => { loginBtn.classList.add('loading'); });
     </script>
 </body>
 </html>

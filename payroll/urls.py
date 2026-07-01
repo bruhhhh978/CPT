@@ -8,6 +8,8 @@ urlpatterns = [
     # Hỗ trợ gõ Sheet/ có chữ hoa
     path('Sheet/', views.payroll_sheet),
     path('statistics/', views.payroll_statistics, name='payroll_statistics'),
+    path('seniority/', views.seniority_table, name='seniority_table'),
+    path('tet-bonus-2025/', views.tet_bonus_2025, name='tet_bonus_2025'),
     path('add-employee/', views.add_employee, name='add_employee'),
     path('edit-employee/<int:pk>/', views.edit_employee, name='edit_employee'),
     path('delete-employee/<int:pk>/', views.delete_employee, name='delete_employee'),
@@ -32,4 +34,11 @@ urlpatterns = [
     path('projects/<int:pk>/edit/', views.du_an_edit, name='du_an_edit'),
     path('projects/<int:pk>/delete/', views.du_an_delete, name='du_an_delete'),
     path('tong-hop-2026/', views.tong_hop_2026, name='tong_hop_2026'),
+
+    # User tracking routes
+    path('manager/user-tracking/', views.user_tracking_dashboard, name='user_tracking_dashboard'),
+    path('manager/user-tracking/<int:user_id>/', views.user_tracking_detail, name='user_tracking_detail'),
+    path('api/online-users/', views.api_online_users, name='api_online_users'),
+    path('chi-tieu/', views.chi_tieu_tong_hop, name='chi_tieu_tong_hop'),
+    path('chi-tieu/export/', views.chi_tieu_export_excel, name='chi_tieu_export_excel'),
 ]

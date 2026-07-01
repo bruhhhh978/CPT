@@ -1,12 +1,13 @@
 import calendar
 import datetime
 from urllib import request
+from urllib.parse import urlencode
 from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
-from django.db.models import Sum, Q
-from .models import Employee, Attendance, Adjustment, AdjustmentLog, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang
+from django.db.models import Sum, Q, Count
+from .models import Employee, Attendance, Adjustment, AdjustmentLog, CongTrinh, NhanVien, DanhMucNghe, ChamCongHangNgay, PhuThuThuongPhat, ChotLuongThang, TetBonusSetting
 from decimal import Decimal
 import pandas as pd
 from django.db import transaction
@@ -16,7 +17,7 @@ from openpyxl.styles import Alignment, Border, Side, Font, PatternFill
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User
-from login.models import UserProfile
+from login.models import UserProfile,  UserLoginLog, UserActivityLog, ActiveSession, log_activity
 from .decorators import manager_only, user_and_manager, allow_viewer
 from django.contrib import messages
 from .forms import CongTrinhForm
@@ -25,14 +26,15 @@ from django.db.models.functions import TruncWeek, TruncMonth, TruncYear
 import datetime
 import calendar
 from decimal import Decimal, ROUND_HALF_UP
+from django.contrib.auth.decorators import login_required
+from collections import defaultdict
+
 # ============ MANAGER DASHBOARD & USER MANAGEMENT ============
 
 @manager_only
 def manager_dashboard(request):
-    """Manager-only dashboard for managing users and system settings"""
     search_query = request.GET.get('q', '').strip()
     users = User.objects.all().select_related('profile')
-    
     if search_query:
         users = users.filter(
             Q(username__icontains=search_query) |
@@ -40,7 +42,6 @@ def manager_dashboard(request):
             Q(last_name__icontains=search_query) |
             Q(email__icontains=search_query)
         )
-
     context = {
         'users': users,
         'user_count': users.count(),
@@ -53,7 +54,6 @@ def manager_dashboard(request):
 
 @manager_only
 def create_user(request):
-    """Create new user account (manager only)"""
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
@@ -61,62 +61,40 @@ def create_user(request):
         role = request.POST.get('role', 'user')
         first_name = request.POST.get('first_name', '').strip()
         last_name = request.POST.get('last_name', '').strip()
-        
-        # Validation
         if not username or len(username) < 3:
             messages.error(request, 'Tên đăng nhập phải ít nhất 3 ký tự.')
             return redirect('payroll:manager_dashboard')
-        
         if User.objects.filter(username=username).exists():
             messages.error(request, 'Tên đăng nhập đã tồn tại.')
             return redirect('payroll:manager_dashboard')
-        
         if not password:
             messages.error(request, 'Mật khẩu không được để trống.')
             return redirect('payroll:manager_dashboard')
-            
         if len(password) < 6:
             messages.error(request, 'Mật khẩu không đúng quy định: Phải có ít nhất 6 ký tự.')
             return redirect('payroll:manager_dashboard')
-        
         if role not in ['manager', 'user', 'viewer']:
             messages.error(request, 'Cấp độ không hợp lệ.')
             return redirect('payroll:manager_dashboard')
-        
         try:
             with transaction.atomic():
-                # Create user
                 user = User.objects.create_user(
-                    username=username,
-                    password=password,
-                    email=email,
-                    first_name=first_name,
-                    last_name=last_name
+                    username=username, password=password, email=email,
+                    first_name=first_name, last_name=last_name
                 )
-                
-                # Sử dụng update_or_create để tránh lỗi UNIQUE constraint 
-                # nếu có signal tự động tạo profile khi tạo User.
-                UserProfile.objects.update_or_create(
-                    user=user, 
-                    defaults={'role': role}
-                )
+                UserProfile.objects.update_or_create(user=user, defaults={'role': role})
             messages.success(request, f'Tạo tài khoản "{username}" với cấp "{role}" thành công.')
+            log_activity(request, 'CREATE', 'TaiKhoan', object_repr=username, description=f'Tạo tài khoản: {username} (cấp {role})')
         except Exception as e:
             messages.error(request, f'Lỗi khi tạo tài khoản: {str(e)}')
-        
         return redirect('payroll:manager_dashboard')
-    
     return redirect('payroll:manager_dashboard')
 
 @manager_only
 def edit_user(request, user_id):
-    """Edit user details and role (manager only)"""
     if request.method == 'POST':
         try:
             user = User.objects.get(id=user_id)
-            
-            # Chỉ cập nhật thông tin cơ bản nếu các trường này tồn tại trong POST
-            # Điều này giúp tránh việc xóa trắng dữ liệu khi cập nhật quyền từ bảng danh sách
             if 'first_name' in request.POST:
                 user.first_name = request.POST.get('first_name', '').strip()
             if 'last_name' in request.POST:
@@ -124,28 +102,23 @@ def edit_user(request, user_id):
             if 'email' in request.POST:
                 user.email = request.POST.get('email', '').strip()
             user.save()
-            
-            # Update role if provided
             new_role = request.POST.get('role')
             if new_role:
-                # Prevent self-demotion
                 if user == request.user and new_role != 'manager':
                     messages.error(request, 'Bạn không thể hạ cấp chính mình.')
                 else:
                     user.profile.role = new_role
                     user.profile.save()
-            
             messages.success(request, f'Cập nhật thông tin cho "{user.username}" thành công.')
+            log_activity(request, 'UPDATE', 'TaiKhoan', object_id=str(user_id), object_repr=user.username, description=f'Cập nhật tài khoản: {user.username}')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
         except Exception as e:
             messages.error(request, f'Lỗi khi cập nhật: {str(e)}')
-    
     return redirect('payroll:manager_dashboard')
 
 @manager_only
 def toggle_user_status(request, user_id):
-    """Lock or unlock user account (manager only)"""
     if request.method == 'POST':
         try:
             user = User.objects.get(id=user_id)
@@ -156,24 +129,24 @@ def toggle_user_status(request, user_id):
                 user.save()
                 status_msg = "Mở khóa" if user.is_active else "Khóa"
                 messages.success(request, f'{status_msg} tài khoản "{user.username}" thành công.')
+                log_activity(request, 'UPDATE', 'TaiKhoan', object_repr=user.username, description=f'{status_msg} tài khoản: {user.username}')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
     return redirect('payroll:manager_dashboard')
 
 @manager_only
 def reset_user_password(request, user_id):
-    """Directly update password for level 2 accounts (manager only)"""
     if request.method == 'POST':
         try:
             user = User.objects.get(id=user_id)
             new_password = request.POST.get('new_password', '').strip()
-            
             if not new_password or len(new_password) < 6:
                 messages.error(request, f'Lỗi: Mật khẩu cho tài khoản "{user.username}" phải từ 6 ký tự trở lên.')
             else:
                 user.set_password(new_password)
                 user.save()
                 messages.success(request, f'Đã đặt lại mật khẩu cho tài khoản "{user.username}".')
+                log_activity(request, 'UPDATE', 'TaiKhoan', object_repr=user.username, description=f'Đặt lại mật khẩu: {user.username}')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
         except Exception as e:
@@ -182,34 +155,28 @@ def reset_user_password(request, user_id):
 
 @manager_only
 def delete_user(request, user_id):
-    """Delete user account (manager only)"""
     if request.method == 'POST':
         try:
             user = User.objects.get(id=user_id)
-            
-            # Prevent self-deletion
             if user == request.user:
                 messages.error(request, 'Bạn không thể xóa chính mình.')
                 return redirect('payroll:manager_dashboard')
-            
             username = user.username
             user.delete()
+            log_activity(request, 'DELETE', 'TaiKhoan', object_repr=username, description=f'Xóa tài khoản: {username}')
             messages.success(request, f'Xóa tài khoản "{username}" thành công.')
         except User.DoesNotExist:
             messages.error(request, 'Người dùng không tồn tại.')
         except Exception as e:
             messages.error(request, f'Lỗi khi xóa: {str(e)}')
-    
     return redirect('payroll:manager_dashboard')
 
 @user_and_manager
 def change_own_password(request):
-    """Allow any user to change their own password"""
     if request.method == 'POST':
         old_password = request.POST.get('old_password')
         new_password = request.POST.get('new_password')
         confirm_password = request.POST.get('confirm_password')
-        
         if not request.user.check_password(old_password):
             messages.error(request, 'Mật khẩu cũ không chính xác.')
         elif new_password != confirm_password:
@@ -219,50 +186,92 @@ def change_own_password(request):
         else:
             request.user.set_password(new_password)
             request.user.save()
-            # Re-login the user is handled by Django session automatically if using auth views, 
-            # here we might need to update session but for simplicity:
             messages.success(request, 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại.')
             return redirect('login:login')
-            
     return render(request, 'payroll/change_password.html')
 
 # ============ END MANAGER DASHBOARD ============
+
 def get_week_start(date):
-    """Trả về ngày Thứ 6 bắt đầu tuần chứa date (T6→T5)."""
     days_since_friday = (date.weekday() - 4) % 7
     return date - datetime.timedelta(days=days_since_friday)
 
 def get_week_range(date):
-    """Trả về danh sách 7 ngày của tuần chứa date (T6..T5)."""
     friday = get_week_start(date)
     return [friday + datetime.timedelta(days=i) for i in range(7)]
 
-def get_available_weeks():
-    """Lấy tất cả các tuần có dữ liệu, sắp xếp theo ngày bắt đầu."""
-    from .models import Attendance
-    dates = Attendance.objects.values_list('date', flat=True).distinct()
+
+# ============================================================
+# ✅ FIX: get_available_weeks — sinh tuần từ khoảng thời gian
+#         dự án thay vì chỉ lấy tuần có Attendance record
+# ============================================================
+def get_available_weeks(du_an_id=None):
+    from .models import Attendance, CongTrinh
     weeks = set()
-    for d in dates:
+
+    # Nếu có dự án → sinh tất cả các tuần từ ngày bắt đầu đến ngày kết thúc
+    if du_an_id:
+        try:
+            du_an = CongTrinh.objects.get(id=du_an_id)
+            start = du_an.ngay_bat_dau
+            end = du_an.thoi_han_ket_thuc or datetime.date.today()
+
+            # Bắt đầu từ thứ 6 đầu tiên chứa ngày bắt đầu dự án
+            current = get_week_start(start)
+            while current <= end:
+                weeks.add(current)
+                current += datetime.timedelta(days=7)
+        except (CongTrinh.DoesNotExist, ValueError):
+            pass
+
+    # Luôn bổ sung thêm các tuần có dữ liệu thực tế
+    # (để không mất data nếu có attendance nằm ngoài khoảng dự án)
+    qs = Attendance.objects.all()
+    if du_an_id:
+        qs = qs.filter(cong_trinh_id=du_an_id)
+    for d in qs.values_list('date', flat=True).distinct():
         weeks.add(get_week_start(d))
+
+    # Fallback: nếu không có dự án và không có data → dùng tuần hiện tại
+    if not weeks:
+        weeks.add(get_week_start(datetime.date.today()))
+
     return sorted(weeks)
 
-def get_available_months():
-    """
-    Lấy tất cả các tháng có dữ liệu.
-    Tháng được xác định bởi ngày Thứ 6 đầu tuần (giống Excel).
-    """
-    from .models import Attendance
-    dates = Attendance.objects.values_list('date', flat=True).distinct()
+
+# ============================================================
+# ✅ FIX: get_available_months — sinh tháng từ khoảng thời
+#         gian dự án thay vì chỉ từ Attendance
+# ============================================================
+def get_available_months(du_an_id=None):
+    from .models import Attendance, CongTrinh
     months = set()
-    for d in dates:
+
+    if du_an_id:
+        try:
+            du_an = CongTrinh.objects.get(id=du_an_id)
+            start = du_an.ngay_bat_dau
+            end = du_an.thoi_han_ket_thuc or datetime.date.today()
+
+            current = get_week_start(start)
+            while current <= end:
+                months.add((current.year, current.month))
+                current += datetime.timedelta(days=7)
+        except (CongTrinh.DoesNotExist, ValueError):
+            pass
+
+    qs = Attendance.objects.all()
+    if du_an_id:
+        qs = qs.filter(cong_trinh_id=du_an_id)
+    for d in qs.values_list('date', flat=True).distinct():
         friday = get_week_start(d)
         months.add((friday.year, friday.month))
+
     return sorted(months)
 
-def get_weeks_in_month(year, month):
-    """Trả về các ngày Thứ 6 bắt đầu tuần thuộc tháng/năm chỉ định."""
-    from .models import Attendance
-    all_weeks = get_available_weeks()
+
+def get_weeks_in_month(year, month, du_an_id=None):
+    all_weeks = get_available_weeks(du_an_id=du_an_id)
     return [w for w in all_weeks if w.year == year and w.month == month]
 
 def to_symbol(val):
@@ -283,20 +292,15 @@ def from_symbol(val):
 
 def get_target_date(request):
     date_str = request.GET.get('date')
-    if date_str:
+    if not date_str or date_str == "None":
+        return timezone.now().date()
+    try:
         return datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-    return timezone.now().date()
+    except ValueError:
+        return timezone.now().date()
 
 def get_weekday_label(date):
-    lookup = {
-        0: 'T2',
-        1: 'T3',
-        2: 'T4',
-        3: 'T5',
-        4: 'T6',
-        5: 'T7',
-        6: 'CN',
-    }
+    lookup = {0: 'T2', 1: 'T3', 2: 'T4', 3: 'T5', 4: 'T6', 5: 'T7', 6: 'CN'}
     return lookup.get(date.weekday(), date.strftime('%a'))
 
 def parse_attendance_input(value):
@@ -327,20 +331,13 @@ def parse_birth_date_query(search_query):
     normalized_query = search_query.strip()
     for date_format in ('%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d/%m/%y', '%d-%m-%y'):
         try:
-            return {
-                'match_type': 'full_date',
-                'value': datetime.datetime.strptime(normalized_query, date_format).date(),
-            }
+            return {'match_type': 'full_date', 'value': datetime.datetime.strptime(normalized_query, date_format).date()}
         except ValueError:
             continue
     for date_format in ('%d/%m', '%d-%m'):
         try:
             parsed_date = datetime.datetime.strptime(normalized_query, date_format)
-            return {
-                'match_type': 'day_month',
-                'day': parsed_date.day,
-                'month': parsed_date.month,
-            }
+            return {'match_type': 'day_month', 'day': parsed_date.day, 'month': parsed_date.month}
         except ValueError:
             continue
     return None
@@ -355,37 +352,31 @@ def build_employee_search_query(search_query, search_type='name'):
         return Q(date_of_birth__day=birth_date_query['day'], date_of_birth__month=birth_date_query['month'])
     return Q(name__icontains=search_query)
 
-def build_weekly_payroll_data(employees, dates):
+def build_weekly_payroll_data(employees, dates, du_an_id=None):
     start_date, end_date = dates[0], dates[-1]
     payroll_data = []
-
     for emp in employees:
-        attendance_map = {
-            att.date: att
-            for att in Attendance.objects.filter(employee=emp, date__range=(start_date, end_date))
-        }
+        att_qs = Attendance.objects.filter(employee=emp, date__range=(start_date, end_date))
+        if du_an_id:
+            att_qs = att_qs.filter(cong_trinh_id=du_an_id)
+        attendance_map = {att.date: att for att in att_qs}
         daily_atts = []
         total_hc = Decimal('0.0')
         total_tc = Decimal('0.0')
-
         for d in dates:
             att = attendance_map.get(d)
             hc = att.regular_workday if att else Decimal('0.0')
             tc = att.overtime_workday if att else Decimal('0.0')
-
             total_hc += hc
             total_tc += tc
-
             daily_atts.append({
                 'date': d,
                 'hc_symbol': to_symbol(hc) if hc > 0 else '',
                 'tc_symbol': str(tc) if tc > 0 else ''
             })
-
         adj = Adjustment.objects.filter(employee=emp, start_date=start_date, end_date=end_date).first()
         adjustment_val = adj.amount if adj else Decimal('0.0')
         total_pay = (total_hc * emp.daily_wage) + (total_tc * (emp.daily_wage / Decimal('8'))) + adjustment_val
-
         payroll_data.append({
             'employee': emp,
             'daily_attendance': daily_atts,
@@ -394,100 +385,677 @@ def build_weekly_payroll_data(employees, dates):
             'adjustment': adjustment_val,
             'total_pay': total_pay
         })
-
     return payroll_data
 
 
-def payroll_sheet(request):
-    # Determine if user can edit (must be authenticated AND be manager/user)
+def parse_year_month(value):
+    if not value:
+        today = timezone.now().date()
+        return today.year, today.month
+    try:
+        parsed = datetime.datetime.strptime(value, '%Y-%m').date()
+        return parsed.year, parsed.month
+    except ValueError:
+        today = timezone.now().date()
+        return today.year, today.month
+
+
+def month_end(year, month):
+    return datetime.date(year, month, calendar.monthrange(year, month)[1])
+
+
+def month_key(date_value):
+    return date_value.year, date_value.month
+
+
+def month_number(year, month):
+    return (year * 12) + month
+
+
+def add_months(date_value, months):
+    month_zero_based = date_value.month - 1 + months
+    year = date_value.year + (month_zero_based // 12)
+    month = (month_zero_based % 12) + 1
+    day = min(date_value.day, calendar.monthrange(year, month)[1])
+    return datetime.date(year, month, day)
+
+
+def iter_month_keys(start_year, start_month, end_year, end_month):
+    current = month_number(start_year, start_month)
+    end = month_number(end_year, end_month)
+    while current <= end:
+        year = (current - 1) // 12
+        month = ((current - 1) % 12) + 1
+        yield year, month
+        current += 1
+
+
+def format_duration(start_date, end_date):
+    if not start_date or start_date > end_date:
+        return '0 tháng'
+
+    total_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    if end_date.day < start_date.day:
+        total_months -= 1
+
+    total_months = max(total_months, 0)
+    anchor_date = add_months(start_date, total_months)
+    days = max((end_date - anchor_date).days, 0)
+    years = total_months // 12
+    months = total_months % 12
+
+    parts = []
+    if years:
+        parts.append(f'{years} năm')
+    if months:
+        parts.append(f'{months} tháng')
+    if days:
+        parts.append(f'{days} ngày')
+    return ' '.join(parts) if parts else '0 tháng'
+
+
+def build_seniority_rows(employees, attendance_map, as_of_date):
+    rows = []
+    as_of_month = month_key(as_of_date)
+
+    for emp in employees:
+        work_dates = sorted(attendance_map.get(emp.id, []))
+        if not work_dates:
+            rows.append({
+                'employee': emp,
+                'first_work_date': None,
+                'active_start_date': None,
+                'last_work_date': None,
+                'seniority_text': '0 tháng',
+                'worked_months': 0,
+                'absence_streak': 0,
+                'reset_count': 0,
+                'status': 'Chưa có công',
+                'status_class': 'muted',
+            })
+            continue
+
+        monthly_dates = {}
+        for work_date in work_dates:
+            if month_number(work_date.year, work_date.month) <= month_number(*as_of_month):
+                monthly_dates.setdefault(month_key(work_date), []).append(work_date)
+
+        if not monthly_dates:
+            rows.append({
+                'employee': emp,
+                'first_work_date': work_dates[0],
+                'active_start_date': None,
+                'last_work_date': None,
+                'seniority_text': '0 tháng',
+                'worked_months': 0,
+                'absence_streak': 0,
+                'reset_count': 0,
+                'status': 'Chưa tới kỳ',
+                'status_class': 'muted',
+            })
+            continue
+
+        first_month = min(monthly_dates.keys(), key=lambda item: month_number(*item))
+        active_start_date = min(monthly_dates[first_month])
+        first_work_date = active_start_date
+        last_work_date = active_start_date
+        absence_streak = 0
+        max_absence_streak = 0
+        reset_count = 0
+        worked_months = 0
+
+        for year, month in iter_month_keys(first_month[0], first_month[1], as_of_month[0], as_of_month[1]):
+            dates_in_month = monthly_dates.get((year, month), [])
+            if dates_in_month:
+                if absence_streak >= 2:
+                    active_start_date = min(dates_in_month)
+                    reset_count += 1
+                    worked_months = 0
+                    first_work_date = active_start_date
+                absence_streak = 0
+                worked_months += 1
+                last_work_date = max(dates_in_month)
+            else:
+                absence_streak += 1
+                max_absence_streak = max(max_absence_streak, absence_streak)
+
+        if absence_streak >= 2:
+            seniority_text = '0 tháng'
+            status = 'Đã ngắt thâm niên'
+            status_class = 'danger'
+        elif absence_streak == 1:
+            seniority_text = format_duration(active_start_date, as_of_date)
+            status = 'Nghỉ 1 tháng'
+            status_class = 'warning'
+        else:
+            seniority_text = format_duration(active_start_date, as_of_date)
+            status = 'Đang tính'
+            status_class = 'success'
+
+        rows.append({
+            'employee': emp,
+            'first_work_date': first_work_date,
+            'active_start_date': active_start_date,
+            'last_work_date': last_work_date,
+            'seniority_text': seniority_text,
+            'worked_months': worked_months if absence_streak < 2 else 0,
+            'absence_streak': absence_streak,
+            'max_absence_streak': max_absence_streak,
+            'reset_count': reset_count,
+            'status': status,
+            'status_class': status_class,
+        })
+
+    return rows
+
+
+TET_BONUS_DEFAULT_YEAR = 2025
+TET_BONUS_MONTHLY_RATES = {
+    'tho': 100000,
+    'phu': 70000,
+}
+TET_BONUS_NEW_WORKER_TIERS = {
+    'tho': [
+        (6, 600000),
+        (4, 400000),
+        (2, 300000),
+        (0, 200000),
+    ],
+    'phu': [
+        (6, 400000),
+        (4, 300000),
+        (2, 250000),
+        (0, 150000),
+    ],
+}
+TET_BONUS_SENIORITY_TIERS = [
+    (84, 2500000, 'Từ 7 năm trở lên'),
+    (72, 2000000, 'Từ 6 đến dưới 7 năm'),
+    (60, 1500000, 'Từ 5 đến dưới 6 năm'),
+    (48, 1000000, 'Từ 4 đến dưới 5 năm'),
+    (36, 700000, 'Từ 3 đến dưới 4 năm'),
+    (24, 500000, 'Từ 2 đến dưới 3 năm'),
+    (12, 200000, 'Từ 1 đến dưới 2 năm'),
+]
+TET_BONUS_SETTING_DEFS = [
+    {'key': 'old_tho_monthly', 'label': 'Công nhân cũ - Thợ / tháng', 'default': 100000, 'group': 'Công nhân cũ'},
+    {'key': 'old_phu_monthly', 'label': 'Công nhân cũ - Phụ / tháng', 'default': 70000, 'group': 'Công nhân cũ'},
+    {'key': 'seniority_12', 'label': 'Thâm niên từ 1 đến dưới 2 năm', 'default': 200000, 'group': 'Thâm niên'},
+    {'key': 'seniority_24', 'label': 'Thâm niên từ 2 đến dưới 3 năm', 'default': 500000, 'group': 'Thâm niên'},
+    {'key': 'seniority_36', 'label': 'Thâm niên từ 3 đến dưới 4 năm', 'default': 700000, 'group': 'Thâm niên'},
+    {'key': 'seniority_48', 'label': 'Thâm niên từ 4 đến dưới 5 năm', 'default': 1000000, 'group': 'Thâm niên'},
+    {'key': 'seniority_60', 'label': 'Thâm niên từ 5 đến dưới 6 năm', 'default': 1500000, 'group': 'Thâm niên'},
+    {'key': 'seniority_72', 'label': 'Thâm niên từ 6 đến dưới 7 năm', 'default': 2000000, 'group': 'Thâm niên'},
+    {'key': 'seniority_84', 'label': 'Thâm niên từ 7 năm trở lên', 'default': 2500000, 'group': 'Thâm niên'},
+    {'key': 'new_tho_6', 'label': 'Công nhân mới - Thợ từ 6 tháng', 'default': 600000, 'group': 'CN mới - Thợ'},
+    {'key': 'new_tho_4', 'label': 'Công nhân mới - Thợ từ 4 đến dưới 6 tháng', 'default': 400000, 'group': 'CN mới - Thợ'},
+    {'key': 'new_tho_2', 'label': 'Công nhân mới - Thợ từ 2 đến dưới 4 tháng', 'default': 300000, 'group': 'CN mới - Thợ'},
+    {'key': 'new_tho_0', 'label': 'Công nhân mới - Thợ dưới 2 tháng', 'default': 200000, 'group': 'CN mới - Thợ'},
+    {'key': 'new_phu_6', 'label': 'Công nhân mới - Phụ từ 6 tháng', 'default': 400000, 'group': 'CN mới - Phụ'},
+    {'key': 'new_phu_4', 'label': 'Công nhân mới - Phụ từ 4 đến dưới 6 tháng', 'default': 300000, 'group': 'CN mới - Phụ'},
+    {'key': 'new_phu_2', 'label': 'Công nhân mới - Phụ từ 2 đến dưới 4 tháng', 'default': 250000, 'group': 'CN mới - Phụ'},
+    {'key': 'new_phu_0', 'label': 'Công nhân mới - Phụ dưới 2 tháng', 'default': 150000, 'group': 'CN mới - Phụ'},
+]
+
+
+def get_tet_bonus_settings():
+    defaults = {item['key']: item['default'] for item in TET_BONUS_SETTING_DEFS}
+    saved_settings = TetBonusSetting.objects.filter(key__in=defaults.keys())
+    for setting in saved_settings:
+        defaults[setting.key] = setting.amount
+    return defaults
+
+
+def build_tet_bonus_setting_groups(settings_map):
+    groups = []
+    group_map = {}
+    for item in TET_BONUS_SETTING_DEFS:
+        group = group_map.setdefault(item['group'], {'name': item['group'], 'items': []})
+        if group not in groups:
+            groups.append(group)
+        group['items'].append({
+            'key': item['key'],
+            'label': item['label'],
+            'amount': settings_map.get(item['key'], item['default']),
+        })
+    return groups
+
+
+def parse_money_input(value):
+    normalized = str(value or '').replace('.', '').replace(',', '').replace(' ', '').strip()
+    if not normalized:
+        return 0
+    return max(int(normalized), 0)
+
+
+def parse_tet_bonus_year(value):
+    try:
+        year = int(str(value or '').strip())
+    except (TypeError, ValueError):
+        return TET_BONUS_DEFAULT_YEAR
+
+    current_year = timezone.now().date().year
+    if year < 2000 or year > current_year:
+        return TET_BONUS_DEFAULT_YEAR
+    return year
+
+
+def get_tet_bonus_year_options(selected_year):
+    years = set(
+        Attendance.objects.exclude(date__isnull=True)
+        .values_list('date__year', flat=True)
+        .distinct()
+    )
+    years.add(TET_BONUS_DEFAULT_YEAR)
+    years.add(selected_year)
+    years.add(timezone.now().date().year)
+    return [
+        {
+            'value': str(year),
+            'label': f'Năm {year}',
+            'selected': year == selected_year,
+        }
+        for year in sorted(years, reverse=True)
+    ]
+
+
+def normalize_tet_position(position):
+    normalized = (position or '').strip().lower()
+    if normalized in ('tho', 'thợ'):
+        return 'tho'
+    if normalized in ('phu', 'phụ'):
+        return 'phu'
+    return normalized
+
+
+def completed_months_between(start_date, end_date):
+    if not start_date or start_date > end_date:
+        return 0
+    total_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month)
+    if end_date.day < start_date.day:
+        total_months -= 1
+    return max(total_months, 0)
+
+
+def get_tet_seniority_bonus(seniority_months, settings_map):
+    for minimum_months, default_amount, label in TET_BONUS_SENIORITY_TIERS:
+        amount = settings_map.get(f'seniority_{minimum_months}', default_amount)
+        if seniority_months >= minimum_months:
+            return amount, label
+    return 0, 'Dưới 1 năm'
+
+
+def get_tet_new_worker_bonus(position_key, worked_months, settings_map):
+    tiers = TET_BONUS_NEW_WORKER_TIERS.get(position_key, [])
+    for minimum_months, default_amount in tiers:
+        if worked_months >= minimum_months:
+            amount = settings_map.get(f'new_{position_key}_{minimum_months}', default_amount)
+            return amount
+    return 0
+
+
+@login_required(login_url='login:login')
+@allow_viewer
+def tet_bonus_2025(request):
+    selected_year = parse_tet_bonus_year(request.POST.get('year') if request.method == 'POST' else request.GET.get('year'))
+
+    if request.method == 'POST':
+        try:
+            is_manager = request.user.is_authenticated and request.user.profile.role == 'manager'
+        except Exception:
+            is_manager = False
+        if not is_manager:
+            messages.error(request, 'Chỉ người dùng cấp 1 mới được chỉnh sửa mức thưởng Tết.')
+            return redirect('payroll:tet_bonus_2025')
+
+        saved_count = 0
+        for item in TET_BONUS_SETTING_DEFS:
+            try:
+                amount = parse_money_input(request.POST.get(item['key'], item['default']))
+            except ValueError:
+                messages.error(request, f"Mức thưởng '{item['label']}' không hợp lệ.")
+                return redirect('payroll:tet_bonus_2025')
+            TetBonusSetting.objects.update_or_create(
+                key=item['key'],
+                defaults={'label': item['label'], 'amount': amount},
+            )
+            saved_count += 1
+
+        log_activity(
+            request,
+            'UPDATE',
+            'ThuongTet',
+            object_repr=f'Chinh sach {selected_year}',
+            description=f'Cập nhật {saved_count} mức thưởng Tết {selected_year}',
+        )
+        messages.success(request, 'Đã cập nhật mức thưởng Tết thành công.')
+        redirect_url = reverse('payroll:tet_bonus_2025')
+        query_parts = [urlencode({'year': selected_year})]
+        du_an_id_post = request.POST.get('du_an_id', '').strip()
+        search_query_post = request.POST.get('q', '').strip()
+        if du_an_id_post:
+            query_parts.append(f'du_an_id={du_an_id_post}')
+        if search_query_post:
+            query_parts.append(urlencode({'q': search_query_post}))
+        if query_parts:
+            redirect_url += '?' + '&'.join(query_parts)
+        return redirect(redirect_url)
+
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    du_an_obj = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+        except (CongTrinh.DoesNotExist, ValueError):
+            du_an_id = ''
+
+    search_query = request.GET.get('q', '').strip()
+    year_start = datetime.date(selected_year, 1, 1)
+    year_end = datetime.date(selected_year, 12, 31)
+    as_of_date = min(year_end, timezone.now().date())
+    bonus_settings = get_tet_bonus_settings()
+    summary_names = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+
+    employee_qs = Employee.objects.exclude(name__in=summary_names).order_by('name')
+    if du_an_id:
+        emp_ids_in_project = Attendance.objects.filter(
+            cong_trinh_id=du_an_id
+        ).values_list('employee_id', flat=True).distinct()
+        employee_qs = employee_qs.filter(id__in=emp_ids_in_project)
+    if search_query:
+        employee_qs = employee_qs.filter(name__icontains=search_query)
+
+    employees = list(employee_qs)
+    employee_ids = [emp.id for emp in employees]
+    attendance_qs = Attendance.objects.filter(
+        Q(regular_workday__gt=0) | Q(overtime_workday__gt=0),
+        date__lte=as_of_date,
+        employee_id__in=employee_ids,
+    ).order_by('date')
+    if du_an_id:
+        attendance_qs = attendance_qs.filter(cong_trinh_id=du_an_id)
+
+    attendance_map = {}
+    worked_month_map = {}
+    for att in attendance_qs:
+        attendance_map.setdefault(att.employee_id, []).append(att.date)
+        if year_start <= att.date <= year_end:
+            worked_month_map.setdefault(att.employee_id, set()).add((att.date.year, att.date.month))
+
+    seniority_rows = build_seniority_rows(employees, attendance_map, as_of_date)
+    bonus_rows = []
+    total_bonus = 0
+    old_worker_count = 0
+    new_worker_count = 0
+
+    for seniority_row in seniority_rows:
+        emp = seniority_row['employee']
+        position_key = normalize_tet_position(emp.position)
+        worked_months = len(worked_month_map.get(emp.id, set()))
+        seniority_months = completed_months_between(seniority_row.get('active_start_date'), as_of_date)
+        if seniority_row.get('status_class') == 'danger':
+            seniority_months = 0
+
+        monthly_rate = bonus_settings.get(f'old_{position_key}_monthly', TET_BONUS_MONTHLY_RATES.get(position_key, 0))
+        monthly_bonus = worked_months * monthly_rate
+        seniority_bonus, seniority_tier = get_tet_seniority_bonus(seniority_months, bonus_settings)
+        has_seniority = seniority_months >= 12
+
+        if has_seniority:
+            worker_type = 'Cũ có thâm niên'
+            policy_bonus = monthly_bonus + seniority_bonus
+            new_worker_bonus = 0
+            old_worker_count += 1
+        else:
+            worker_type = 'Mới chưa có thâm niên'
+            new_worker_bonus = get_tet_new_worker_bonus(position_key, worked_months, bonus_settings)
+            policy_bonus = new_worker_bonus
+            new_worker_count += 1
+
+        total_bonus += policy_bonus
+        new_bonus_tiers = TET_BONUS_NEW_WORKER_TIERS.get(position_key, [])
+        bonus_rows.append({
+            'employee': emp,
+            'worker_type': worker_type,
+            'position_key': position_key,
+            'worked_months': worked_months,
+            'monthly_rate': monthly_rate,
+            'monthly_bonus': monthly_bonus,
+            'seniority_text': seniority_row.get('seniority_text', '0 tháng'),
+            'seniority_months': seniority_months,
+            'seniority_tier': seniority_tier,
+            'seniority_bonus': seniority_bonus if has_seniority else 0,
+            'new_worker_bonus': new_worker_bonus,
+            'new_worker_tier': next(
+                (f'Từ {minimum} tháng' if minimum else 'Dưới 2 tháng' for minimum, _ in new_bonus_tiers if worked_months >= minimum),
+                '-'
+            ),
+            'total_bonus': policy_bonus,
+            'status': seniority_row.get('status', ''),
+            'status_class': seniority_row.get('status_class', 'muted'),
+        })
+
+    projects = CongTrinh.objects.all().order_by('ten_cong_trinh')
+    can_edit_bonus = False
+    try:
+        can_edit_bonus = request.user.is_authenticated and request.user.profile.role == 'manager'
+    except Exception:
+        can_edit_bonus = False
+    context = {
+        'bonus_rows': bonus_rows,
+        'projects': projects,
+        'du_an_id': du_an_id,
+        'du_an_obj': du_an_obj,
+        'search_query': search_query,
+        'bonus_year': str(selected_year),
+        'selected_year': selected_year,
+        'as_of_date': as_of_date,
+        'year_options': get_tet_bonus_year_options(selected_year),
+        'total_workers': len(bonus_rows),
+        'old_worker_count': old_worker_count,
+        'new_worker_count': new_worker_count,
+        'total_bonus': total_bonus,
+        'can_edit_bonus': can_edit_bonus,
+        'bonus_setting_groups': build_tet_bonus_setting_groups(bonus_settings),
+        'bonus_settings': bonus_settings,
+    }
+    return render(request, 'payroll/tet_bonus_2025.html', context)
+
+
+@login_required(login_url='login:login')
+def seniority_table(request):
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    du_an_obj = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+        except (CongTrinh.DoesNotExist, ValueError):
+            du_an_id = ''
+
+    selected_year, selected_month = parse_year_month(request.GET.get('month'))
+    as_of_date = month_end(selected_year, selected_month)
+    today = timezone.now().date()
+    if as_of_date > today:
+        as_of_date = today
+        selected_year, selected_month = today.year, today.month
+
+    search_query = request.GET.get('q', '').strip()
+    summary_names = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+
+    employee_qs = Employee.objects.exclude(name__in=summary_names).order_by('name')
+    if du_an_id:
+        emp_ids_in_project = Attendance.objects.filter(
+            cong_trinh_id=du_an_id
+        ).values_list('employee_id', flat=True).distinct()
+        employee_qs = employee_qs.filter(id__in=emp_ids_in_project)
+    if search_query:
+        employee_qs = employee_qs.filter(name__icontains=search_query)
+
+    employees = list(employee_qs)
+    attendance_qs = Attendance.objects.filter(
+        Q(regular_workday__gt=0) | Q(overtime_workday__gt=0),
+        date__lte=as_of_date,
+        employee_id__in=[emp.id for emp in employees],
+    ).order_by('date')
+    if du_an_id:
+        attendance_qs = attendance_qs.filter(cong_trinh_id=du_an_id)
+
+    attendance_map = {}
+    for att in attendance_qs:
+        attendance_map.setdefault(att.employee_id, []).append(att.date)
+
+    seniority_rows = build_seniority_rows(employees, attendance_map, as_of_date)
+
+    available_months = set(get_available_months(du_an_id=du_an_id))
+    available_months.add((today.year, today.month))
+    for date_value in attendance_qs.values_list('date', flat=True).distinct():
+        available_months.add((date_value.year, date_value.month))
+
+    month_options = [
+        {
+            'value': f'{year}-{month:02d}',
+            'label': f'Tháng {month:02d}/{year}',
+            'selected': year == selected_year and month == selected_month,
+        }
+        for year, month in sorted(available_months)
+        if month_number(year, month) <= month_number(today.year, today.month)
+    ]
+
+    projects = CongTrinh.objects.all().order_by('ten_cong_trinh')
+    total_active = sum(1 for row in seniority_rows if row['status_class'] == 'success')
+    total_warning = sum(1 for row in seniority_rows if row['status_class'] == 'warning')
+    total_reset = sum(1 for row in seniority_rows if row['status_class'] == 'danger')
+
+    context = {
+        'seniority_rows': seniority_rows,
+        'month_options': month_options,
+        'selected_month': f'{selected_year}-{selected_month:02d}',
+        'as_of_date': as_of_date,
+        'projects': projects,
+        'du_an_id': du_an_id,
+        'du_an_obj': du_an_obj,
+        'search_query': search_query,
+        'total_workers': len(seniority_rows),
+        'total_active': total_active,
+        'total_warning': total_warning,
+        'total_reset': total_reset,
+    }
+    return render(request, 'payroll/seniority_table.html', context)
+
+
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+
+@xframe_options_sameorigin
+def payroll_sheet(request, pk=None):
+    du_an_id = pk or request.GET.get('du_an_id') or ''
+    du_an_id = str(du_an_id).strip() if du_an_id else ''
+    du_an_obj = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+        except (CongTrinh.DoesNotExist, ValueError):
+            du_an_id = ''
+
     can_edit = False
     is_viewer_mode = True
-    
     if request.user.is_authenticated:
         try:
             role = request.user.profile.role
             if role in ['manager', 'user']:
                 can_edit = True
                 is_viewer_mode = False
-            # Viewer role logged in - can_edit stays False
         except:
             messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
             return redirect('login:login')
-    else:
-        # Not authenticated - viewer mode (read-only)
-        is_viewer_mode = True
-        can_edit = False
-    
-    target_date = get_target_date(request)
+
     view_type = request.GET.get('view_type', 'week').strip().lower()
     if view_type not in ('week', 'month'):
         view_type = 'week'
 
+    # ✅ FIX: Nếu có dự án và không truyền ?date= → tự động về tuần đầu dự án
+    if du_an_obj and 'date' not in request.GET:
+        target_date = get_week_start(du_an_obj.ngay_bat_dau)
+    else:
+        target_date = get_target_date(request)
+
     search_query = request.GET.get('q', '').strip()
-    SUMMARY_NAMES = ['Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ']
-    if search_query:
+    SUMMARY_NAMES = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ', 
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+
+    if du_an_id:
+        emp_ids_in_project = Attendance.objects.filter(
+            cong_trinh_id=du_an_id
+        ).values_list('employee_id', flat=True).distinct()
         employees = Employee.objects.filter(
-            name__icontains=search_query
+            id__in=emp_ids_in_project
         ).exclude(name__in=SUMMARY_NAMES).order_by('name')
     else:
-        employees = Employee.objects.exclude(
-            name__in=SUMMARY_NAMES
-        ).order_by('name')
+        employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
+
+    if search_query:
+        employees = employees.filter(name__icontains=search_query)
+
     search_type = get_search_type(request)
 
     if view_type == 'month':
-        # Lấy tất cả tuần thuộc tháng của target_date (theo mốc T6)
         week_start = get_week_start(target_date)
         year, month = week_start.year, week_start.month
-        weeks_this_month = get_weeks_in_month(year, month)
+        weeks_this_month = get_weeks_in_month(year, month, du_an_id=du_an_id)
         if weeks_this_month:
-            first_day = weeks_this_month[0]                              # T6 đầu tiên
-            last_day  = weeks_this_month[-1] + datetime.timedelta(days=6)  # T5 cuối cùng
+            first_day = weeks_this_month[0]
+            last_day = weeks_this_month[-1] + datetime.timedelta(days=6)
             dates = [first_day + datetime.timedelta(days=i) for i in range((last_day - first_day).days + 1)]
         else:
-            dates = get_week_range(target_date)  # fallback
+            dates = get_week_range(target_date)
     else:
         dates = get_week_range(target_date)
 
     start_date, end_date = dates[0], dates[-1]
 
     if request.GET.get('export') == 'excel':
-        # Only authenticated users can export
         if not request.user.is_authenticated:
             messages.error(request, 'Vui lòng đăng nhập để xuất Excel.')
             return redirect('login:login')
-        return export_payroll_excel(dates, start_date, end_date, view_type)
 
-    payroll_data = build_weekly_payroll_data(employees, dates)
-    all_weeks_raw = get_available_weeks()
+        log_activity(request, 'EXPORT', 'BaoCao',
+                 description=f'Xuất Excel bảng lương {start_date.strftime("%d/%m")} - {end_date.strftime("%d/%m/%Y")}')
+
+        return export_payroll_excel(dates, start_date, end_date, view_type, du_an_id=du_an_id)
+
+    payroll_data = build_weekly_payroll_data(employees, dates, du_an_id=du_an_id)
+
+    # Danh sách tuần — lấy từ khoảng thời gian dự án (đã fix)
+    all_weeks_raw = get_available_weeks(du_an_id=du_an_id)
     available_weeks = [
         {
-            'start'   : w,
-            'end'     : w + datetime.timedelta(days=6),
+            'start': w,
+            'end': w + datetime.timedelta(days=6),
             'date_str': w.strftime('%Y-%m-%d'),
-            'label'   : f"Tuần {i:02d}: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}",
+            'label': f"Tuần {i:02d}: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}",
         }
         for i, w in enumerate(all_weeks_raw, start=1)
     ]
+
+    # Danh sách tháng — lấy từ khoảng thời gian dự án (đã fix)
     available_months = []
-    for (year, month) in get_available_months():
-        weeks_in_m = get_weeks_in_month(year, month)
-        # date_str trỏ về tuần đầu tiên của tháng đó
+    for (year, month) in get_available_months(du_an_id=du_an_id):
+        weeks_in_m = get_weeks_in_month(year, month, du_an_id=du_an_id)
         first_week_str = weeks_in_m[0].strftime('%Y-%m-%d') if weeks_in_m else f'{year}-{month:02d}-01'
         available_months.append({
-            'year'     : year,
-            'month'    : month,
-            'date_str' : first_week_str,
-            'label'    : f"Tháng {month:02d}/{year}",
-            'value'    : f"{year}-{month:02d}",
+            'year': year, 'month': month, 'date_str': first_week_str,
+            'label': f"Tháng {month:02d}/{year}", 'value': f"{year}-{month:02d}",
         })
 
     date_headers = [
-        {
-            'date': d,
-            'label': get_weekday_label(d),
-            'display': f"{get_weekday_label(d)} {d.strftime('%d/%m')}"
-        }
+        {'date': d, 'label': get_weekday_label(d), 'display': f"{get_weekday_label(d)} {d.strftime('%d/%m')}"}
         for d in dates
     ]
 
@@ -497,7 +1065,6 @@ def payroll_sheet(request):
         day_tc = Decimal('0.0')
         for row in payroll_data:
             att = row['daily_attendance'][i]
-            # parse lại từ symbol
             hc_sym = att['hc_symbol']
             tc_sym = att['tc_symbol']
             if hc_sym == 'x':   day_hc += Decimal('1.0')
@@ -507,52 +1074,43 @@ def payroll_sheet(request):
                 except: pass
         summary_daily.append({'hc': day_hc, 'tc': day_tc})
 
-    summary_total_hc  = sum(r['total_hc'] for r in payroll_data).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-    summary_total_tc  = sum(r['total_tc'] for r in payroll_data).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-    summary_total_pay = sum(r['total_pay'] for r in payroll_data)
+    summary_total_hc = sum((Decimal(r['total_hc']) for r in payroll_data), Decimal(0)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    summary_total_tc = sum((Decimal(r['total_tc']) for r in payroll_data), Decimal(0)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+    summary_total_pay = sum((Decimal(r['total_pay']) for r in payroll_data), Decimal(0))
+
     context = {
-        'target_date': target_date,
-        'dates': dates,
-        'date_headers': date_headers,
-        'start_date': start_date,
-        'end_date': end_date,
+        'target_date': target_date, 'dates': dates, 'date_headers': date_headers,
+        'start_date': start_date, 'end_date': end_date,
         'prev_week': start_date - datetime.timedelta(days=7),
         'next_week': start_date + datetime.timedelta(days=7),
-        'payroll_data': payroll_data,
-        'search_query': search_query,
-        'search_type': search_type,
-        'available_weeks': available_weeks,
-        'available_months': available_months,
-        'view_type': view_type,
-        'current_month': target_date.strftime('%m'),
-        'can_edit': can_edit,
-        'is_viewer_mode': is_viewer_mode,
-        'summary_daily'    : summary_daily,
-        'summary_total_hc' : summary_total_hc,
-        'summary_total_tc' : summary_total_tc,
-        'summary_total_pay': summary_total_pay,
+        'payroll_data': payroll_data, 'search_query': search_query, 'search_type': search_type,
+        'available_weeks': available_weeks, 'available_months': available_months,
+        'view_type': view_type, 'current_month': target_date.strftime('%m'),
+        'can_edit': can_edit, 'is_viewer_mode': is_viewer_mode,
+        'summary_daily': summary_daily, 'summary_total_hc': summary_total_hc,
+        'summary_total_tc': summary_total_tc, 'summary_total_pay': summary_total_pay,
+        'du_an_id': du_an_id, 'du_an_obj': du_an_obj,
     }
     return render(request, 'payroll/payroll_sheet.html', context)
+
 
 from django.http import JsonResponse
 
 def get_adjustment_logs(request, employee_id):
     logs = AdjustmentLog.objects.filter(employee_id=employee_id).order_by('-created_at')
-
     data = []
     for log in logs:
         data.append({
-        'ngay': log.created_at.strftime('%d/%m/%Y %H:%M'),
-        'tang': float(log.amount) if log.amount > 0 else 0,
-        'giam': abs(float(log.amount)) if log.amount < 0 else 0,
-    })
-
+            'ngay': log.created_at.strftime('%d/%m/%Y %H:%M'),
+            'tang': float(log.amount) if log.amount > 0 else 0,
+            'giam': abs(float(log.amount)) if log.amount < 0 else 0,
+        })
     return JsonResponse({'logs': data})
+
 
 def payroll_statistics(request):
     can_edit = False
     is_viewer_mode = True
-    
     if request.user.is_authenticated:
         try:
             role = request.user.profile.role
@@ -562,16 +1120,30 @@ def payroll_statistics(request):
         except:
             messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
             return redirect('login:login')
+
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    du_an_obj = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+        except (CongTrinh.DoesNotExist, ValueError):
+            du_an_id = ''
+
     search_query = request.GET.get('q', '').strip()
-    target_date = get_target_date(request)
     view_type = request.GET.get('view_type', 'week').strip().lower()
     if view_type not in ('week', 'month'):
         view_type = 'week'
 
+    # ✅ FIX: Nếu có dự án và không truyền ?date= → tự động về tuần đầu dự án
+    if du_an_obj and 'date' not in request.GET:
+        target_date = get_week_start(du_an_obj.ngay_bat_dau)
+    else:
+        target_date = get_target_date(request)
+
     if view_type == 'month':
         week_start = get_week_start(target_date)
         year, month = week_start.year, week_start.month
-        weeks_this_month = get_weeks_in_month(year, month)
+        weeks_this_month = get_weeks_in_month(year, month, du_an_id=du_an_id)
         if weeks_this_month:
             first_day = weeks_this_month[0]
             last_day = weeks_this_month[-1] + datetime.timedelta(days=6)
@@ -580,13 +1152,26 @@ def payroll_statistics(request):
             dates = get_week_range(target_date)
     else:
         dates = get_week_range(target_date)
-    SUMMARY_NAMES = ['Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ']
-    employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
+
+    SUMMARY_NAMES = [
+    'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ', 
+    'Người chấm công', 'Cộng', 'Tổng cộng'
+]
+    if du_an_id:
+        emp_ids_in_project = Attendance.objects.filter(
+            cong_trinh_id=du_an_id
+        ).values_list('employee_id', flat=True).distinct()
+        employees = Employee.objects.filter(
+            id__in=emp_ids_in_project
+        ).exclude(name__in=SUMMARY_NAMES).order_by('name')
+    else:
+        employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
+
     if search_query:
         employees = employees.filter(name__icontains=search_query)
-    start_date, end_date = dates[0], dates[-1]
 
-    payroll_data = build_weekly_payroll_data(employees, dates)
+    start_date, end_date = dates[0], dates[-1]
+    payroll_data = build_weekly_payroll_data(employees, dates, du_an_id=du_an_id)
 
     total_hc = sum((row['total_hc'] for row in payroll_data), Decimal('0.0'))
     total_tc = sum((row['total_tc'] for row in payroll_data), Decimal('0.0'))
@@ -602,70 +1187,47 @@ def payroll_statistics(request):
                     daily_hc += from_symbol(att['hc_symbol'])
                     daily_tc += from_symbol(att['tc_symbol'])
                     break
-        daily_totals.append({
-            'label': current_date.strftime('%d/%m'),
-            'hc': float(daily_hc),
-            'tc': float(daily_tc),
-        })
+        daily_totals.append({'label': current_date.strftime('%d/%m'), 'hc': float(daily_hc), 'tc': float(daily_tc)})
 
     chart_rows = [
-        {
-            'name': row['employee'].name,
-            'hc': float(row['total_hc']),
-            'tc': float(row['total_tc']),
-        }
+        {'name': row['employee'].name, 'hc': float(row['total_hc']), 'tc': float(row['total_tc'])}
         for row in payroll_data
     ]
 
-    all_weeks_raw = get_available_weeks()
+    all_weeks_raw = get_available_weeks(du_an_id=du_an_id)
     available_weeks = [
         {
-            'start': w,
-            'end': w + datetime.timedelta(days=6),
+            'start': w, 'end': w + datetime.timedelta(days=6),
             'date_str': w.strftime('%Y-%m-%d'),
             'label': f"Tuần {i:02d}: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}",
         }
         for i, w in enumerate(all_weeks_raw, start=1)
     ]
     available_months = []
-    for (year, month) in get_available_months():
-        weeks_in_m = get_weeks_in_month(year, month)
+    for (year, month) in get_available_months(du_an_id=du_an_id):
+        weeks_in_m = get_weeks_in_month(year, month, du_an_id=du_an_id)
         first_week_str = weeks_in_m[0].strftime('%Y-%m-%d') if weeks_in_m else f'{year}-{month:02d}-01'
-        available_months.append({
-            'year': year,
-            'month': month,
-            'date_str': first_week_str,
-            'label': f"Tháng {month:02d}/{year}",
-        })
+        available_months.append({'year': year, 'month': month, 'date_str': first_week_str, 'label': f"Tháng {month:02d}/{year}"})
 
     context = {
-        'start_date': start_date,
-        'end_date': end_date,
-        'target_date': target_date,
+        'start_date': start_date, 'end_date': end_date, 'target_date': target_date,
         'view_type': view_type,
         'prev_week': start_date - datetime.timedelta(days=7),
         'next_week': start_date + datetime.timedelta(days=7),
-        'payroll_data': payroll_data,
-        'employee_count': len(payroll_data),
-        'total_hc': total_hc,
-        'total_tc': total_tc,
-        'total_pay': total_pay,
-        'daily_totals': daily_totals,
-        'chart_rows': chart_rows,
-        'available_weeks': available_weeks,
-        'available_months': available_months,
-        'search_query': search_query,
-        'can_edit': can_edit,
-        'is_viewer_mode': is_viewer_mode,
+        'payroll_data': payroll_data, 'employee_count': len(payroll_data),
+        'total_hc': total_hc, 'total_tc': total_tc, 'total_pay': total_pay,
+        'daily_totals': daily_totals, 'chart_rows': chart_rows,
+        'available_weeks': available_weeks, 'available_months': available_months,
+        'search_query': search_query, 'can_edit': can_edit, 'is_viewer_mode': is_viewer_mode,
+        'du_an_id': du_an_id, 'du_an_obj': du_an_obj,
     }
     return render(request, 'payroll/payroll_statistics.html', context)
 
+# 
 def add_employee(request):
-    # Check authorization - only users and managers can add
     if not request.user.is_authenticated:
         messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
         return redirect('login:login')
-    
     try:
         role = request.user.profile.role
         if role not in ['manager', 'user']:
@@ -674,27 +1236,75 @@ def add_employee(request):
     except:
         messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
         return redirect('login:login')
-    
+
     if request.method == 'POST':
         name = request.POST.get('name')
         date_of_birth = request.POST.get('date_of_birth') or None
         pos = request.POST.get('position')
         wage = request.POST.get('daily_wage', 0)
-        Employee.objects.create(
-            name=name,
-            date_of_birth=date_of_birth,
-            position=pos,
-            daily_wage=wage
+        du_an_id = request.POST.get('du_an_id', '').strip()
+        current_date = request.POST.get('current_date', '').strip()
+
+        emp = Employee.objects.create(
+            name=name, date_of_birth=date_of_birth, position=pos, daily_wage=wage
         )
+        if du_an_id:
+            try:
+                cong_trinh_obj = CongTrinh.objects.get(id=du_an_id)
+
+                # ✅ Ưu tiên lấy ngày bắt đầu của dự án
+                if cong_trinh_obj.ngay_bat_dau:
+                    anchor_date = cong_trinh_obj.ngay_bat_dau
+                elif current_date:
+                    anchor_date = datetime.datetime.strptime(current_date, '%Y-%m-%d').date()
+                else:
+                    anchor_date = timezone.now().date()
+
+                week_dates = get_week_range(anchor_date)
+                first_day_of_week = week_dates[0]
+
+                Attendance.objects.get_or_create(
+                    employee=emp,
+                    date=first_day_of_week,
+                    cong_trinh=cong_trinh_obj,
+                    defaults={
+                        'regular_workday': Decimal('0.0'),
+                        'overtime_workday': Decimal('0.0'),
+                    }
+                )
+            except (CongTrinh.DoesNotExist, ValueError):
+                pass
+
         messages.success(request, f'Đã thêm nhân viên "{name}" thành công.')
+
+        redirect_url = reverse('payroll:payroll_sheet')
+        params = []
+        if du_an_id:
+            try:
+                cong_trinh_obj = CongTrinh.objects.get(id=du_an_id)
+                if cong_trinh_obj.ngay_bat_dau:
+                    week_start = get_week_start(cong_trinh_obj.ngay_bat_dau)
+                    params.append(f'date={week_start.strftime("%Y-%m-%d")}')
+                elif current_date:
+                    params.append(f'date={current_date}')
+            except (CongTrinh.DoesNotExist, ValueError):
+                if current_date:
+                    params.append(f'date={current_date}')
+            params.append(f'du_an_id={du_an_id}')
+        elif current_date:
+            params.append(f'date={current_date}')
+
+        if params:
+            redirect_url += '?' + '&'.join(params)
+        return redirect(redirect_url)
+
     return redirect('payroll:payroll_sheet')
+# 
 
 def edit_employee(request, pk):
-    # Check authorization - only users and managers can edit
     if not request.user.is_authenticated:
         messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
         return redirect('login:login')
-    
     try:
         role = request.user.profile.role
         if role not in ['manager', 'user']:
@@ -703,7 +1313,7 @@ def edit_employee(request, pk):
     except:
         messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
         return redirect('login:login')
-    
+
     emp = get_object_or_404(Employee, pk=pk)
     if request.method == 'POST':
         emp.name = request.POST.get('name')
@@ -711,15 +1321,15 @@ def edit_employee(request, pk):
         emp.position = request.POST.get('position')
         emp.daily_wage = request.POST.get('daily_wage')
         emp.save()
+        log_activity(request, 'UPDATE', 'NhanVien', object_id=str(pk), object_repr=emp.name, description=f'Sửa nhân viên: {emp.name}')
         messages.success(request, f'Đã cập nhật nhân viên "{emp.name}" thành công.')
     return redirect('payroll:payroll_sheet')
 
+
 def delete_employee(request, pk):
-    # Check authorization - only users and managers can delete
     if not request.user.is_authenticated:
         messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
         return redirect('login:login')
-    
     try:
         role = request.user.profile.role
         if role not in ['manager', 'user']:
@@ -728,19 +1338,19 @@ def delete_employee(request, pk):
     except:
         messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
         return redirect('login:login')
-    
+
     emp = get_object_or_404(Employee, pk=pk)
     emp_name = emp.name
     emp.delete()
+    log_activity(request, 'DELETE', 'NhanVien', object_repr=emp_name, description=f'Xóa nhân viên: {emp_name}')
     messages.success(request, f'Đã xóa nhân viên "{emp_name}" thành công.')
     return redirect('payroll:payroll_sheet')
 
+
 def import_excel(request):
-    # Check authorization - only managers can import
     if not request.user.is_authenticated:
         messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
         return redirect('login:login')
-    
     try:
         role = request.user.profile.role
         if role != 'manager':
@@ -749,28 +1359,37 @@ def import_excel(request):
     except:
         messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
         return redirect('login:login')
-    
+
+    du_an_id = request.POST.get('du_an_id', '').strip()
+    cong_trinh_obj = None
+    # Thêm vào đầu import_excel, sau khi xác định cong_trinh_obj
+    if du_an_id and not cong_trinh_obj:
+        messages.warning(request, f'Không tìm thấy dự án ID={du_an_id}. Dữ liệu sẽ không gắn vào dự án nào.')
+    if du_an_id:
+        try:
+            cong_trinh_obj = CongTrinh.objects.get(id=du_an_id)
+        except (CongTrinh.DoesNotExist, ValueError):
+            cong_trinh_obj = None
+
+    first_target_date = None
+
     if request.method == 'POST' and request.FILES.get('excel_file'):
         from openpyxl import load_workbook
         import re
 
         excel_file = request.FILES['excel_file']
         wb = load_workbook(excel_file, data_only=True)
-        
-        first_target_date = None  
 
         for ws in wb.worksheets:
+            
             sheet_name = ws.title.strip().lower()
             if 'tổng' in sheet_name or 'tong' in sheet_name:
                 continue
-
             header_text = str(ws['G1'].value or '')
             date_matches = re.findall(r'(\d{1,2}/\d{1,2}/(?:\d{4}|\d{2}))', header_text)
-
             if not date_matches:
                 continue
             raw_date = date_matches[0]
-
             try:
                 try:
                     target_date = datetime.datetime.strptime(raw_date, '%d/%m/%Y').date()
@@ -778,25 +1397,27 @@ def import_excel(request):
                     target_date = datetime.datetime.strptime(raw_date, '%d/%m/%y').date()
             except Exception:
                 continue
-            
-            if first_target_date is None:  
-                first_target_date = target_date  
-
+            if first_target_date is None:
+                first_target_date = target_date
             dates = get_week_range(target_date)
+            SKIP_NAMES = [
+                'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ', 
+                'Người chấm công', 'Cộng', 'Tổng cộng', 'STT'
+            ]
             for row in ws.iter_rows(min_row=6):
                 name = row[1].value
                 if not name:
                     continue
-
+                name = str(name).strip()
+                if name in SKIP_NAMES:
+                    continue
                 position = row[2].value
                 emp, _ = Employee.objects.get_or_create(
-                    name=name,
-                    defaults={'position': position or 'Thợ', 'daily_wage': 0}
+                    name=name, defaults={'position': position or 'Thợ', 'daily_wage': 0}
                 )
                 if position and emp.position != position:
                     emp.position = position
                     emp.save()
-
                 col_idx = 3
                 for d in dates:
                     hc_val = from_symbol(row[col_idx].value)
@@ -805,13 +1426,13 @@ def import_excel(request):
                         tc_val = Decimal(str(tc_raw)) if tc_raw else Decimal('0')
                     except:
                         tc_val = Decimal('0')
-
-                    att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
+                    att, _ = Attendance.objects.get_or_create(
+                        employee=emp, date=d, cong_trinh=cong_trinh_obj
+                    )
                     att.regular_workday = hc_val
                     att.overtime_workday = tc_val
                     att.save()
                     col_idx += 2
-
                 wage = row[19].value
                 if wage:
                     try:
@@ -819,58 +1440,64 @@ def import_excel(request):
                     except:
                         pass
                     emp.save()
-
                 adj_val_raw = row[20].value
                 if adj_val_raw:
                     try:
                         adj_val = Decimal(str(adj_val_raw).replace('.', '').replace(',', ''))
                     except:
                         adj_val = Decimal('0')
-
                     if adj_val != Decimal('0'):
                         adj, _ = Adjustment.objects.get_or_create(
-                            employee=emp,
-                            start_date=dates[0],
-                            end_date=dates[-1]
+                            employee=emp, start_date=dates[0], end_date=dates[-1]
                         )
                         adj.amount = adj_val
                         adj.save()
                         AdjustmentLog.objects.create(
-                            employee=emp,
-                            start_date=dates[0],
-                            end_date=dates[-1],
-                            amount=adj_val
+                            employee=emp, start_date=dates[0], end_date=dates[-1], amount=adj_val
                         )
 
-    # <-- sửa dòng redirect
     redirect_date = first_target_date.strftime('%Y-%m-%d') if first_target_date else request.POST.get('current_date', '')
-    return redirect(reverse('payroll:payroll_sheet') + f"?date={redirect_date}")
+    redirect_url = reverse('payroll:payroll_sheet') + f"?date={redirect_date}"
+    if du_an_id:
+        redirect_url += f"&du_an_id={du_an_id}"
+    return redirect(redirect_url)
+
 
 def delete_all_data(request):
-    # Check authorization - only managers can delete all
     if not request.user.is_authenticated:
         messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
         return redirect('login:login')
-    
     try:
         role = request.user.profile.role
         if role != 'manager':
-            messages.error(request, 'Chỉ quản lý mới có thể xóa tất cả dữ liệu.')
+            messages.error(request, 'Chỉ quản lý mới có thể xóa dữ liệu.')
             return redirect('payroll:payroll_sheet')
     except:
         messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
         return redirect('login:login')
-    
-    Employee.objects.all().delete()
-    messages.success(request, 'Đã xóa tất cả dữ liệu nhân viên.')
-    return redirect('payroll:payroll_sheet')
+
+    du_an_id = request.POST.get('du_an_id', '').strip()
+    if du_an_id:
+        try:
+            du_an = CongTrinh.objects.get(id=du_an_id)
+            deleted_count, _ = Attendance.objects.filter(cong_trinh=du_an).delete()
+            messages.success(request, f'Đã xóa {deleted_count} bản ghi chấm công của dự án "{du_an.ten_cong_trinh}".')
+        except CongTrinh.DoesNotExist:
+            messages.error(request, 'Dự án không tồn tại.')
+    else:
+        Employee.objects.all().delete()
+        messages.success(request, 'Đã xóa tất cả dữ liệu nhân viên.')
+
+    redirect_url = reverse('payroll:payroll_sheet')
+    if du_an_id:
+        redirect_url += f'?du_an_id={du_an_id}'
+    return redirect(redirect_url)
+
 
 def save_attendance(request):
-    # Check authorization - only users and managers can save
     if not request.user.is_authenticated:
         messages.error(request, 'Bạn phải đăng nhập để thực hiện chức năng này.')
         return redirect('login:login')
-    
     try:
         role = request.user.profile.role
         if role not in ['manager', 'user']:
@@ -879,8 +1506,17 @@ def save_attendance(request):
     except:
         messages.error(request, 'Lỗi: Hồ sơ người dùng không hợp lệ.')
         return redirect('login:login')
+
     if request.method == 'POST':
         current_date_str = request.POST.get('current_date')
+        du_an_id = request.POST.get('du_an_id', '').strip()
+        cong_trinh_obj = None
+        if du_an_id:
+            try:
+                cong_trinh_obj = CongTrinh.objects.get(id=du_an_id)
+            except (CongTrinh.DoesNotExist, ValueError):
+                du_an_id = ''
+
         try:
             target_date = datetime.datetime.strptime(current_date_str, '%Y-%m-%d').date()
         except Exception:
@@ -896,7 +1532,16 @@ def save_attendance(request):
 
         start_date, end_date = dates[0], dates[-1]
         search_query = request.POST.get('q', '').strip()
-        employees = get_filtered_employees(search_query)
+
+        if du_an_id and cong_trinh_obj:
+            emp_ids_in_project = Attendance.objects.filter(
+                cong_trinh=cong_trinh_obj
+            ).values_list('employee_id', flat=True).distinct()
+            employees = Employee.objects.filter(id__in=emp_ids_in_project).order_by('name')
+            if search_query:
+                employees = employees.filter(name__icontains=search_query)
+        else:
+            employees = get_filtered_employees(search_query)
 
         for emp in employees:
             for d in dates:
@@ -905,28 +1550,30 @@ def save_attendance(request):
                 tc_val = parse_attendance_input(request.POST.get(f'att_{emp.id}_{date_str}_tc'))
 
                 if hc_val == Decimal('0.0') and tc_val == Decimal('0.0'):
-                    Attendance.objects.filter(employee=emp, date=d).delete()
+                    if cong_trinh_obj:
+                        att = Attendance.objects.filter(
+                            employee=emp, date=d, cong_trinh=cong_trinh_obj
+                        ).first()
+                        if att:
+                            att.regular_workday = Decimal('0.0')
+                            att.overtime_workday = Decimal('0.0')
+                            att.save()
+                    else:
+                        Attendance.objects.filter(employee=emp, date=d, cong_trinh=None).delete()
                 else:
-                    att, _ = Attendance.objects.get_or_create(employee=emp, date=d)
+                    att, _ = Attendance.objects.get_or_create(
+                        employee=emp, date=d, cong_trinh=cong_trinh_obj
+                    )
                     att.regular_workday = hc_val
                     att.overtime_workday = tc_val
-                    du_an_id = request.POST.get('du_an_id')
-                    if du_an_id:
-                        try:
-                            att.cong_trinh = CongTrinh.objects.get(id=du_an_id)
-                        except CongTrinh.DoesNotExist:
-                            pass
                     att.save()
 
             adj_name = f'adj_{emp.id}_{start_date.strftime("%Y-%m-%d")}_{end_date.strftime("%Y-%m-%d")}'
             adj_val = parse_attendance_input(request.POST.get(adj_name))
             adjustment, created = Adjustment.objects.get_or_create(
-                employee=emp,
-                start_date=start_date,
-                end_date=end_date,
+                employee=emp, start_date=start_date, end_date=end_date,
                 defaults={'amount': Decimal('0.0')}
             )
-
             if adj_val == Decimal('0.0'):
                 if not created:
                     adjustment.delete()
@@ -935,33 +1582,47 @@ def save_attendance(request):
                 adjustment.save()
 
         messages.success(request, 'Đã lưu dữ liệu chấm công và các khoản tăng/giảm thành công.')
-
         redirect_url = reverse('payroll:payroll_sheet') + f"?date={current_date_str}&view_type={view_type}"
         if search_query:
             redirect_url += f"&q={search_query}"
+        if du_an_id:
+            redirect_url += f"&du_an_id={du_an_id}"
         return redirect(redirect_url)
 
     return redirect('payroll:payroll_sheet')
 
-def export_payroll_excel(dates, start_date, end_date, view_type='week'):
+
+def export_payroll_excel(dates, start_date, end_date, view_type='week', du_an_id=None, export_address=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "Bang Cham Cong"
 
-    # Header Info
+    du_an_name = None
+    if du_an_id:
+        try:
+            du_an_obj = CongTrinh.objects.get(id=du_an_id)
+            du_an_name = du_an_obj.ten_cong_trinh
+            if not export_address:
+                export_address = du_an_obj.dia_diem
+        except (CongTrinh.DoesNotExist, ValueError):
+            pass
+    export_address = (export_address or "TP. Hồ Chí Minh").strip()
+
     ws.merge_cells('A1:E1')
     ws['A1'] = "CÔNG TY TNHH XÂY DỰNG CPT"
     ws['A1'].font = Font(bold=True, size=12)
-    
+
     ws.merge_cells('A2:E2')
-    ws['A2'] = "Địa chỉ: TP. Hồ Chí Minh"
-    
-    # Calculate columns count to merge header row 3 correctly
-    # 3 cols (STT, Name, Job) + 2 * len(dates) + 7 cols (Totals/Actions/etc)
+    if du_an_name:
+        ws['A2'] = f"Công trình: {du_an_name} — Địa chỉ: {export_address}"
+    else:
+        ws['A2'] = f"Địa chỉ: {export_address}"
+    ws['A2'].font = Font(italic=True, size=10)
+
+    # Thêm dòng địa chỉ riêng (chèn vào row mới, đẩy các phần dưới xuống 1 dòng)
     total_cols_count = 3 + 2 * len(dates) + 7
     from openpyxl.utils import get_column_letter
     max_col_letter = get_column_letter(total_cols_count)
-    
     ws.merge_cells(f'A3:{max_col_letter}3')
     if view_type == 'month':
         ws['A3'] = f"BẢNG CHẤM CÔNG VÀ TÍNH LƯƠNG (Tháng: {start_date.strftime('%m/%Y')})"
@@ -969,21 +1630,14 @@ def export_payroll_excel(dates, start_date, end_date, view_type='week'):
         ws['A3'] = f"BẢNG CHẤM CÔNG VÀ TÍNH LƯƠNG (Tuần: {start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')})"
     ws['A3'].font = Font(bold=True, size=14)
     ws['A3'].alignment = Alignment(horizontal='center')
-
-    # Table Headers
     headers = ['STT', 'Họ tên', 'Nghề']
-    ws.append(headers) # Row 4 placeholder
-    
-    # Merge for STT, Name, Job
+    ws.append(headers)
     for col in ['A', 'B', 'C']:
         ws.merge_cells(f'{col}4:{col}5')
         ws[f'{col}4'].alignment = Alignment(horizontal='center', vertical='center')
         ws[f'{col}4'].fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
-
     ws['A4'], ws['B4'], ws['C4'] = 'STT', 'Họ tên', 'Nghề'
-    
-    # Date headers
-    col_offset = 4 # Column D
+    col_offset = 4
     v_days = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
     for i, d in enumerate(dates):
         cell = ws.cell(row=4, column=col_offset)
@@ -992,13 +1646,10 @@ def export_payroll_excel(dates, start_date, end_date, view_type='week'):
         ws.merge_cells(start_row=4, start_column=col_offset, end_row=4, end_column=col_offset+1)
         cell.alignment = Alignment(horizontal='center')
         cell.fill = PatternFill(start_color="CFE2F3", end_color="CFE2F3", fill_type="solid")
-        
         ws.cell(row=5, column=col_offset).value = "HC"
         ws.cell(row=5, column=col_offset+1).value = "TC"
         ws.cell(row=5, column=col_offset).fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
         col_offset += 2
-
-    # Result headers
     res_headers = ['Tổng HC', 'Tổng TC', 'Lương ngày', 'Tăng/Giảm', 'Tổng lãnh', 'Ký nhận', 'Ghi chú']
     for i, h in enumerate(res_headers):
         cell = ws.cell(row=4, column=col_offset + i)
@@ -1006,22 +1657,44 @@ def export_payroll_excel(dates, start_date, end_date, view_type='week'):
         ws.merge_cells(start_row=4, start_column=col_offset + i, end_row=5, end_column=col_offset + i)
         cell.alignment = Alignment(horizontal='center', vertical='center')
         cell.fill = PatternFill(start_color="D9EAD3", end_color="D9EAD3", fill_type="solid")
+    SUMMARY_NAMES = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ', 
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+    if du_an_id:
+        emp_ids = Attendance.objects.filter(
+            cong_trinh_id=du_an_id
+        ).values_list('employee_id', flat=True).distinct()
+        employees = Employee.objects.filter(id__in=emp_ids).exclude(name__in=SUMMARY_NAMES).order_by('name')
+    else:
+        employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
 
-    # Data
-    employees = Employee.objects.all().order_by('name')
+    max_name_length = max((len(emp.name or '') for emp in employees), default=len('Ho ten'))
+    name_column_width = min(max(max_name_length + 4, 32), 50)
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = name_column_width
+    ws.column_dimensions['C'].width = 10
+    for date_col in range(4, col_offset):
+        ws.column_dimensions[get_column_letter(date_col)].width = 7
+    result_widths = [10, 10, 13, 13, 14, 12, 18]
+    for i, width in enumerate(result_widths):
+        ws.column_dimensions[get_column_letter(col_offset + i)].width = width
+
     row_num = 6
     border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-
     for idx, emp in enumerate(employees, 1):
         ws.cell(row=row_num, column=1).value = idx
         ws.cell(row=row_num, column=2).value = emp.name
+        ws.cell(row=row_num, column=2).alignment = Alignment(horizontal='left')
         ws.cell(row=row_num, column=3).value = emp.position
-        
         total_hc = Decimal('0.0')
         total_tc = Decimal('0.0')
         c_idx = 4
         for d in dates:
-            att = Attendance.objects.filter(employee=emp, date=d).first()
+            att_qs = Attendance.objects.filter(employee=emp, date=d)
+            if du_an_id:
+                att_qs = att_qs.filter(cong_trinh_id=du_an_id)
+            att = att_qs.first()
             hc = att.regular_workday if att else Decimal('0.0')
             tc = att.overtime_workday if att else Decimal('0.0')
             ws.cell(row=row_num, column=c_idx).value = to_symbol(hc) if hc > 0 else ""
@@ -1029,32 +1702,31 @@ def export_payroll_excel(dates, start_date, end_date, view_type='week'):
             total_hc += hc
             total_tc += tc
             c_idx += 2
-            
         ws.cell(row=row_num, column=c_idx).value = float(total_hc)
         ws.cell(row=row_num, column=c_idx+1).value = float(total_tc)
         ws.cell(row=row_num, column=c_idx+2).value = float(emp.daily_wage)
         ws.cell(row=row_num, column=c_idx+2).number_format = '#,##0'
-        
         adj = Adjustment.objects.filter(employee=emp, start_date=start_date, end_date=end_date).first()
         adj_val = adj.amount if adj else Decimal('0.0')
         ws.cell(row=row_num, column=c_idx+3).value = float(adj_val)
         ws.cell(row=row_num, column=c_idx+3).font = Font(color="FF0000")
-        
         total_pay = (total_hc * emp.daily_wage) + (total_tc * (emp.daily_wage / Decimal('8'))) + adj_val
         ws.cell(row=row_num, column=c_idx+4).value = float(total_pay)
         ws.cell(row=row_num, column=c_idx+4).font = Font(bold=True)
         ws.cell(row=row_num, column=c_idx+4).number_format = '#,##0'
-        
         row_num += 1
-
-    # Style all cells
     for r in ws.iter_rows(min_row=4, max_row=row_num-1, min_col=1, max_col=col_offset+len(res_headers)-1):
         for cell in r:
             cell.border = border
             if not cell.alignment.horizontal:
                 cell.alignment = Alignment(horizontal='center')
-
+    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['B'].width = name_column_width
+    ws.column_dimensions['C'].width = 10
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
     if view_type == 'month':
         response['Content-Disposition'] = f'attachment; filename=BangLuongThang_{start_date.strftime("%m_%Y")}.xlsx'
     else:
@@ -1063,28 +1735,21 @@ def export_payroll_excel(dates, start_date, end_date, view_type='week'):
     return response
 
 
-
-
-# ============ D? �N QU?N L? (PROJECT MANAGEMENT) ============
+# ============ DỰ ÁN QUẢN LÝ (PROJECT MANAGEMENT) ============
 
 @allow_viewer
 def du_an_list(request):
-    """Danh sách dự án với bộ lọc và tìm kiếm"""
     search_query = request.GET.get('search', '').strip()
     time_filter = request.GET.get('time_filter', 'all')
     status_filter = request.GET.get('status', '')
-    
     du_an = CongTrinh.objects.all()
-    
     if search_query:
         du_an = du_an.filter(
-            Q(ten_cong_trinh__icontains=search_query) | 
+            Q(ten_cong_trinh__icontains=search_query) |
             Q(dia_diem__icontains=search_query)
         )
-    
     if status_filter:
         du_an = du_an.filter(trang_thai=status_filter)
-    
     now = timezone.now().date()
     if time_filter == 'ngay':
         du_an = du_an.filter(ngay_bat_dau=now)
@@ -1096,21 +1761,15 @@ def du_an_list(request):
         du_an = du_an.filter(ngay_bat_dau__year=now.year, ngay_bat_dau__month=now.month)
     elif time_filter == 'nam':
         du_an = du_an.filter(ngay_bat_dau__year=now.year)
-    
     du_an = du_an.order_by('-ngay_bat_dau')
-    
     context = {
-        'du_an': du_an,
-        'search_query': search_query,
-        'time_filter': time_filter,
-        'status_filter': status_filter,
-        'status_choices': CongTrinh.TRANG_THAI_CHOICES,
+        'du_an': du_an, 'search_query': search_query, 'time_filter': time_filter,
+        'status_filter': status_filter, 'status_choices': CongTrinh.TRANG_THAI_CHOICES, 'can_edit': True,
     }
     return render(request, 'payroll/du_an_list.html', context)
 
 @manager_only
 def du_an_create(request):
-    """Thêm công trình mới (Chỉ quản lý)"""
     if request.method == 'POST':
         form = CongTrinhForm(request.POST)
         if form.is_valid():
@@ -1121,28 +1780,45 @@ def du_an_create(request):
         form = CongTrinhForm()
     return render(request, 'payroll/du_an_form.html', {'form': form, 'title': 'Thêm công trình'})
 
+
 @allow_viewer
 def du_an_detail(request, pk):
     du_an = get_object_or_404(CongTrinh, pk=pk)
-    
     from .models import Attendance
-    cham_cong_qs = Attendance.objects.filter(cong_trinh=du_an)
-    cham_cong_count = cham_cong_qs.count()
-    nhan_vien_count = cham_cong_qs.values('employee').distinct().count()
-    
-    # Thêm phần này
-    all_weeks = get_available_weeks()
-    latest_week = all_weeks[-1].strftime('%Y-%m-%d') if all_weeks else None
-    
+    SUMMARY_NAMES = ['Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ', 'Người chấm công']
+    nhan_vien_count = Attendance.objects.filter(
+        cong_trinh=du_an
+    ).exclude(
+        employee__name__in=SUMMARY_NAMES
+    ).values('employee').distinct().count()
+
+    cham_cong_count = Attendance.objects.filter(
+        cong_trinh=du_an
+    ).exclude(
+        regular_workday=0,
+        overtime_workday=0
+    ).count()
+
+    # ✅ FIX: get_available_weeks giờ đã sinh tuần từ khoảng thời gian dự án,
+    # nên all_weeks luôn có dữ liệu ngay cả khi chưa chấm công lần nào
+    all_weeks = get_available_weeks(du_an_id=pk)
+
+    if all_weeks:
+        # Dùng tuần đầu tiên của dự án làm điểm mặc định
+        latest_week = all_weeks[0].strftime('%Y-%m-%d')
+    else:
+        # Fallback an toàn: tuần chứa ngày bắt đầu dự án
+        latest_week = get_week_start(du_an.ngay_bat_dau).strftime('%Y-%m-%d')
+
     return render(request, 'payroll/du_an_detail.html', {
         'du_an': du_an,
         'cham_cong_count': cham_cong_count,
         'nhan_vien_count': nhan_vien_count,
-        'latest_week': latest_week,  # thêm dòng này
+        'latest_week': latest_week,
     })
+
 @manager_only
 def du_an_edit(request, pk):
-    """Sửa thông tin công trình (Chỉ quản lý)"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
     if request.method == 'POST':
         form = CongTrinhForm(request.POST, instance=du_an)
@@ -1156,7 +1832,6 @@ def du_an_edit(request, pk):
 
 @manager_only
 def du_an_delete(request, pk):
-    """Xóa công trình (Chỉ quản lý)"""
     du_an = get_object_or_404(CongTrinh, pk=pk)
     if request.method == 'POST':
         ten = du_an.ten_cong_trinh
@@ -1167,65 +1842,42 @@ def du_an_delete(request, pk):
 
 @allow_viewer
 def tong_hop_2026(request):
-    """Tổng hợp ngày công 2026 - đọc từ DB (đã import từ Excel)"""
     from itertools import groupby
-
-    # Lấy tất cả tuần có dữ liệu, sắp xếp theo thứ tự
-    all_weeks = get_available_weeks()  # list các ngày T6 đầu tuần
-
+    all_weeks = get_available_weeks()
     if not all_weeks:
         messages.error(request, 'Chưa có dữ liệu. Vui lòng import file Excel trước.')
         return redirect('payroll:payroll_statistics')
-
-    # Lấy tất cả nhân viên (trừ tên tổng hợp)
-    SUMMARY_NAMES = ['Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ']
+    SUMMARY_NAMES = [
+    'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ', 
+    'Người chấm công', 'Cộng', 'Tổng cộng'
+]
     employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
-
-    # Tạo danh sách cột tuần
     tuan_cols = [
         {
-            'col'  : i,
-            'label': f'T{i+1:02d}',
-            'date' : f"{w.strftime('%d/%m')}",
-            'week_start': w,
-            'week_end'  : w + datetime.timedelta(days=6),
+            'col': i, 'label': f'T{i+1:02d}', 'date': f"{w.strftime('%d/%m')}",
+            'week_start': w, 'week_end': w + datetime.timedelta(days=6),
         }
         for i, w in enumerate(all_weeks)
     ]
-
-    # Đọc toàn bộ attendance một lần (tối ưu query)
     start = all_weeks[0]
-    end   = all_weeks[-1] + datetime.timedelta(days=6)
-    all_atts = Attendance.objects.filter(
-        date__range=(start, end)
-    ).select_related('employee')
-
-    # Map: {employee_id: {date: attendance}}
+    end = all_weeks[-1] + datetime.timedelta(days=6)
+    all_atts = Attendance.objects.filter(date__range=(start, end)).select_related('employee')
     att_map = {}
     for att in all_atts:
         att_map.setdefault(att.employee_id, {})[att.date] = att
-
-    # Đọc tất cả adjustment
-    all_adjs = Adjustment.objects.filter(
-        start_date__gte=start, end_date__lte=end
-    ).select_related('employee')
+    all_adjs = Adjustment.objects.filter(start_date__gte=start, end_date__lte=end).select_related('employee')
     adj_map = {}
     for adj in all_adjs:
         adj_map[(adj.employee_id, adj.start_date)] = adj.amount
-
-    # Xây dựng dữ liệu từng nhân viên
     employee_rows = []
-    col_totals  = [0.0] * len(tuan_cols)
-    grand_cong  = 0.0
+    col_totals = [0.0] * len(tuan_cols)
+    grand_cong = 0.0
     grand_luong = 0.0
-
     for emp in employees:
         emp_atts = att_map.get(emp.id, {})
         week_vals = []
-        row_cong  = 0.0
-
+        row_cong = 0.0
         for idx, t in enumerate(tuan_cols):
-            # Tổng công HC trong tuần này
             week_cong = Decimal('0.0')
             d = t['week_start']
             while d <= t['week_end']:
@@ -1233,39 +1885,613 @@ def tong_hop_2026(request):
                 if att:
                     week_cong += att.regular_workday
                 d += datetime.timedelta(days=1)
-
             val = int(float(week_cong) + 0.5) if week_cong > 0 else None
             week_vals.append(val)
             if val:
-                row_cong        += val
+                row_cong += val
                 col_totals[idx] += val
-
         tong_luong_nv = row_cong * float(emp.daily_wage)
         row_cong = round(row_cong, 1)
-        grand_cong   += row_cong
-        grand_luong  += tong_luong_nv
+        grand_cong += row_cong
+        grand_luong += tong_luong_nv
         employee_rows.append({
-            'ten'       : emp.name,
-            'nghe'      : emp.position,
-            'luong_ngay': int(emp.daily_wage),
-            'week_vals' : week_vals,
-            'tong_cong' : row_cong,
-            'tong_luong': tong_luong_nv,
+            'ten': emp.name, 'nghe': emp.position, 'luong_ngay': int(emp.daily_wage),
+            'week_vals': week_vals, 'tong_cong': row_cong, 'tong_luong': tong_luong_nv,
         })
-
-    # Chỉ giữ nhân viên có ít nhất 1 ngày công
     employee_rows = [e for e in employee_rows if e['tong_cong'] > 0]
-
     context = {
-        'ten_cty'    : 'CTY CP XÂY DỰNG CPT',
-        'ten_bang'   : 'BẢNG TỔNG HỢP NGÀY CÔNG',
-        'khoang_tg'  : f"{all_weeks[0].strftime('%d/%m/%Y')} - {end.strftime('%d/%m/%Y')}",
-        'ten_ct'     : 'NHÀ PHỐ - A.LÂM - CỒN KHƯƠNG',
-        'tuan_cols'  : tuan_cols,
-        'employees'  : employee_rows,
-        'col_totals' : col_totals,
-        'grand_cong' : grand_cong,
-        'grand_luong': grand_luong,
-        'so_nv'      : len(employee_rows),
+        'ten_cty': 'CTY CP XÂY DỰNG CPT', 'ten_bang': 'BẢNG TỔNG HỢP NGÀY CÔNG',
+        'khoang_tg': f"{all_weeks[0].strftime('%d/%m/%Y')} - {end.strftime('%d/%m/%Y')}",
+        'ten_ct': 'NHÀ PHỐ - A.LÂM - CỒN KHƯƠNG',
+        'tuan_cols': tuan_cols, 'employees': employee_rows, 'col_totals': col_totals,
+        'grand_cong': grand_cong, 'grand_luong': grand_luong, 'so_nv': len(employee_rows),
     }
     return render(request, 'payroll/tong_hop_2026.html', context)
+
+# ── 1. Dashboard tổng quan theo dõi user ─────────────────
+@login_required
+@manager_only
+def user_tracking_dashboard(request):
+    now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+ 
+    # ---- Thống kê nhanh ----
+    online_cutoff = now - timezone.timedelta(minutes=5)
+    online_users  = ActiveSession.objects.filter(
+        last_activity__gte=online_cutoff
+    ).select_related('user').order_by('-last_activity')
+ 
+    logins_today = UserLoginLog.objects.filter(
+        action=UserLoginLog.ACTION_LOGIN,
+        created_at__gte=today_start
+    ).count()
+ 
+    failed_today = UserLoginLog.objects.filter(
+        action=UserLoginLog.ACTION_FAILED,
+        created_at__gte=today_start
+    ).count()
+ 
+    # ---- Activity log gần nhất (50 dòng) ----
+    recent_activities = UserActivityLog.objects.select_related('user') \
+                            .order_by('-created_at')[:50]
+ 
+    # ---- Login log gần nhất (50 dòng) ----
+    recent_logins = UserLoginLog.objects.select_related('user') \
+                        .order_by('-created_at')[:50]
+ 
+    # ---- Top user hoạt động hôm nay ----
+    top_users = UserActivityLog.objects.filter(
+        created_at__gte=today_start
+    ).values('user__username').annotate(
+        total=Count('id')
+    ).order_by('-total')[:10]
+ 
+    # ---- Thống kê theo loại hành động hôm nay ----
+    action_stats = UserActivityLog.objects.filter(
+        created_at__gte=today_start
+    ).values('action_type').annotate(total=Count('id')).order_by('-total')
+ 
+    context = {
+        'online_users':      online_users,
+        'online_count':      online_users.count(),
+        'logins_today':      logins_today,
+        'failed_today':      failed_today,
+        'recent_activities': recent_activities,
+        'recent_logins':     recent_logins,
+        'top_users':         top_users,
+        'action_stats':      action_stats,
+        'now':               now,
+    }
+    return render(request, 'payroll/user_tracking_dashboard.html', context)
+ 
+ 
+# ── 2. Lịch sử của 1 user cụ thể ─────────────────────────
+@login_required
+@manager_only
+def user_tracking_detail(request, user_id):
+    target_user = get_object_or_404(User, pk=user_id)
+ 
+    activities = UserActivityLog.objects.filter(
+        user=target_user
+    ).order_by('-created_at')[:200]
+ 
+    logins = UserLoginLog.objects.filter(
+        user=target_user
+    ).order_by('-created_at')[:100]
+ 
+    # Thống kê tổng hợp
+    total_actions = activities.count()
+    action_breakdown = UserActivityLog.objects.filter(
+        user=target_user
+    ).values('action_type').annotate(total=Count('id')).order_by('-total')
+ 
+    context = {
+        'target_user':       target_user,
+        'activities':        activities,
+        'logins':            logins,
+        'total_actions':     total_actions,
+        'action_breakdown':  action_breakdown,
+    }
+    return render(request, 'payroll/user_tracking_detail.html', context)
+ 
+ 
+# ── 3. API endpoint — refresh danh sách online (AJAX) ────
+@login_required
+@manager_only
+def api_online_users(request):
+    cutoff = timezone.now() - timezone.timedelta(minutes=5)
+    sessions = ActiveSession.objects.filter(
+        last_activity__gte=cutoff
+    ).select_related('user')
+ 
+    data = []
+    for s in sessions:
+        data.append({
+            'username':      s.user.username,
+            'full_name':     s.user.get_full_name() or s.user.username,
+            'current_page':  s.current_page,
+            'last_activity': s.last_activity.strftime('%H:%M:%S'),
+            'ip':            s.ip_address or '—',
+            'duration':      s.duration,
+        })
+ 
+    return JsonResponse({'users': data, 'count': len(data)})
+ 
+
+# --- Thống kê chi tiêu tổng hợp theo dự án, tháng, năm ---
+@allow_viewer
+def chi_tieu_tong_hop(request):
+    from .models import Attendance, CongTrinh, Adjustment
+    from collections import defaultdict
+    import datetime
+    from decimal import Decimal
+
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    nam      = request.GET.get('nam', str(datetime.date.today().year))
+    
+    try:
+        nam = int(nam)
+    except ValueError:
+        nam = datetime.date.today().year
+
+    if 'thang' not in request.GET:
+        thang = str(datetime.date.today().month)
+    else:
+        thang = request.GET.get('thang', '').strip()
+
+    if thang.lower() in ('all', 'tất cả', ''):
+        thang = ''
+    else:
+        try:
+            thang = int(thang)
+            if not (1 <= thang <= 12): thang = ''
+        except ValueError:
+            thang = ''
+
+    all_du_an = CongTrinh.objects.all().order_by('-ngay_bat_dau')
+    du_an_obj = None
+    if du_an_id:
+        du_an_obj = all_du_an.filter(id=du_an_id).first()
+
+    SUMMARY_NAMES = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+    att_qs = Attendance.objects.select_related('employee', 'cong_trinh').exclude(
+        employee__name__in=SUMMARY_NAMES
+    ).filter(date__year=nam)
+    
+    adj_qs = Adjustment.objects.select_related('employee').exclude(
+        employee__name__in=SUMMARY_NAMES
+    ).filter(start_date__year=nam)
+
+    if thang:
+        att_qs = att_qs.filter(date__month=thang)
+        adj_qs = adj_qs.filter(start_date__month=thang)
+
+    if du_an_id:
+        att_qs = att_qs.filter(cong_trinh_id=du_an_id)
+        emp_ids = set(att_qs.values_list('employee_id', flat=True))
+        adj_qs = adj_qs.filter(employee_id__in=emp_ids)
+
+    def create_period_dict():
+        return {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0'), 'tang_giam': Decimal('0'), 'chi_tieu': Decimal('0'), 'start_date': None, 'thang_val': ''}
+
+    grand_total_data = defaultdict(create_period_dict)
+    projects_data = {}
+    emp_proj_days = defaultdict(lambda: defaultdict(lambda: defaultdict(Decimal)))
+
+    rows = att_qs.values(
+        'date', 'regular_workday', 'overtime_workday', 'employee__daily_wage', 'employee_id', 'cong_trinh_id', 'cong_trinh__ten_cong_trinh'
+    )
+
+    for r in rows:
+        d     = r['date']
+        hc    = r['regular_workday']  or Decimal('0')
+        tc    = r['overtime_workday'] or Decimal('0')
+        wage  = r['employee__daily_wage'] or Decimal('0')
+        luong = hc * wage + tc * (wage / Decimal('8'))
+        
+        emp_id = r['employee_id']
+        proj_id = r['cong_trinh_id']
+        proj_name = r['cong_trinh__ten_cong_trinh']
+
+        if thang:
+            w   = get_week_start(d)
+            key = f"Tuần: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}"
+            start_d = w
+            thang_val = w.month # fix to week's month or d.month, we will use start_d
+        else:
+            key = f"Tháng {d.month:02d}/{d.year}"
+            start_d = datetime.date(d.year, d.month, 1)
+            thang_val = d.month
+
+        grand_total_data[key]['hc'] += hc
+        grand_total_data[key]['tc'] += tc
+        grand_total_data[key]['luong'] += luong
+        grand_total_data[key]['start_date'] = start_d
+        grand_total_data[key]['thang_val'] = start_d.month
+
+        if proj_id not in projects_data:
+            projects_data[proj_id] = {
+                'id': proj_id,
+                'name': proj_name,
+                'periods': defaultdict(create_period_dict),
+                'tong_hc': Decimal('0'),
+                'tong_tc': Decimal('0'),
+                'tong_chi_tieu': Decimal('0'),
+                'tong_tang_giam': Decimal('0'),
+            }
+            
+        projects_data[proj_id]['periods'][key]['hc'] += hc
+        projects_data[proj_id]['periods'][key]['tc'] += tc
+        projects_data[proj_id]['periods'][key]['luong'] += luong
+        projects_data[proj_id]['periods'][key]['start_date'] = start_d
+        projects_data[proj_id]['periods'][key]['thang_val'] = start_d.month
+        
+        emp_proj_days[key][emp_id][proj_id] += (hc + tc)
+
+    adj_rows = adj_qs.values('start_date', 'amount', 'employee_id')
+    for r in adj_rows:
+        d = r['start_date']
+        amt = r['amount'] or Decimal('0')
+        emp_id = r['employee_id']
+
+        if thang:
+            w   = get_week_start(d)
+            key = f"Tuần: {w.strftime('%d/%m')} – {(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}"
+            start_d = w
+        else:
+            key = f"Tháng {d.month:02d}/{d.year}"
+            start_d = datetime.date(d.year, d.month, 1)
+
+        if key not in grand_total_data:
+            grand_total_data[key]['start_date'] = start_d
+            grand_total_data[key]['thang_val'] = start_d.month
+        grand_total_data[key]['tang_giam'] += amt
+        
+        best_proj = None
+        if key in emp_proj_days and emp_id in emp_proj_days[key]:
+            best_proj = max(emp_proj_days[key][emp_id].items(), key=lambda x: x[1])[0]
+        else:
+            best_proj = du_an_id if du_an_id else None
+            
+        if best_proj and best_proj in projects_data:
+            projects_data[best_proj]['periods'][key]['tang_giam'] += amt
+
+    grand_tong_hc = grand_tong_tc = grand_tong_luong = grand_tong_tang_giam = grand_tong_chi_tieu = Decimal('0')
+    sorted_grand_keys = sorted(grand_total_data.keys(), key=lambda k: grand_total_data[k]['start_date'] or datetime.date.min)
+    
+    grand_period_rows = []
+    for key in sorted_grand_keys:
+        d = grand_total_data[key]
+        d['chi_tieu'] = d['luong'] + d['tang_giam']
+        grand_tong_hc += d['hc']
+        grand_tong_tc += d['tc']
+        grand_tong_luong += d['luong']
+        grand_tong_tang_giam += d['tang_giam']
+        grand_tong_chi_tieu += d['chi_tieu']
+        grand_period_rows.append({
+            'period_name': key,
+            'start_date': d['start_date'],
+            'thang_val': d['thang_val'],
+            'hc': float(d['hc']),
+            'tc': float(d['tc']),
+            'luong': float(d['luong']),
+            'tang_giam': float(d['tang_giam']),
+            'chi_tieu': float(d['chi_tieu']),
+        })
+
+    final_projects = []
+    for pid, pdata in projects_data.items():
+        sorted_p_keys = sorted(pdata['periods'].keys(), key=lambda k: pdata['periods'][k]['start_date'] or datetime.date.min)
+        p_rows = []
+        p_tong_hc = p_tong_tc = p_tong_luong = p_tong_tang_giam = p_tong_chi_tieu = Decimal('0')
+        for key in sorted_p_keys:
+            d = pdata['periods'][key]
+            d['chi_tieu'] = d['luong'] + d['tang_giam']
+            p_tong_hc += d['hc']
+            p_tong_tc += d['tc']
+            p_tong_luong += d['luong']
+            p_tong_tang_giam += d['tang_giam']
+            p_tong_chi_tieu += d['chi_tieu']
+            p_rows.append({
+                'period_name': key,
+                'start_date': d['start_date'],
+                'thang_val': d['thang_val'],
+                'hc': float(d['hc']),
+                'tc': float(d['tc']),
+                'luong': float(d['luong']),
+                'tang_giam': float(d['tang_giam']),
+                'chi_tieu': float(d['chi_tieu']),
+            })
+            
+        pdata['rows'] = p_rows
+        pdata['tong_hc'] = float(p_tong_hc)
+        pdata['tong_tc'] = float(p_tong_tc)
+        pdata['tong_luong'] = float(p_tong_luong)
+        pdata['tong_tang_giam'] = float(p_tong_tang_giam)
+        pdata['tong_chi_tieu'] = float(p_tong_chi_tieu)
+        final_projects.append(pdata)
+
+    final_projects.sort(key=lambda x: x['tong_chi_tieu'], reverse=True)
+
+    chart_labels = [r['period_name'] for r in grand_period_rows]
+    chart_luong = [r['chi_tieu'] for r in grand_period_rows]
+    chart_hc = [r['hc'] for r in grand_period_rows]
+    chart_tc = [r['tc'] for r in grand_period_rows]
+
+    doughnut_labels = [p['name'] for p in final_projects]
+    doughnut_data = [p['tong_chi_tieu'] for p in final_projects]
+
+    all_years = list(range(2023, datetime.date.today().year + 2))
+    
+    context = {
+        'du_an_id': du_an_id,
+        'du_an_obj': du_an_obj,
+        'all_du_an': all_du_an,
+        'nam': nam,
+        'thang': thang,
+        'all_years': all_years,
+        
+        'period_rows': grand_period_rows,
+        'tong_hc': float(grand_tong_hc),
+        'tong_tc': float(grand_tong_tc),
+        'tong_luong': float(grand_tong_luong),
+        'tong_tang_giam': float(grand_tong_tang_giam),
+        'tong_chi_tieu': float(grand_tong_chi_tieu),
+        
+        'projects_data': final_projects,
+        'is_multi_project': not bool(du_an_id),
+        
+        'chart_labels': chart_labels,
+        'chart_luong': chart_luong,
+        'chart_hc': chart_hc,
+        'chart_tc': chart_tc,
+        'doughnut_labels': doughnut_labels,
+        'doughnut_data': doughnut_data,
+    }
+    return render(request, 'payroll/chi_tieu_tong_hop.html', context)
+
+
+
+def chi_tieu_export_excel(request):
+    period   = request.GET.get('period', 'month')
+    du_an_id = request.GET.get('du_an_id', '').strip()
+    nam      = request.GET.get('nam', str(datetime.date.today().year))
+    try:
+        nam = int(nam)
+    except ValueError:
+        nam = datetime.date.today().year
+
+    SUMMARY_NAMES = [
+        'Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ',
+        'Người chấm công', 'Cộng', 'Tổng cộng'
+    ]
+    att_qs = Attendance.objects.select_related('employee').exclude(
+        employee__name__in=SUMMARY_NAMES
+    ).filter(date__year=nam)
+    if du_an_id:
+        att_qs = att_qs.filter(cong_trinh_id=du_an_id)
+
+    du_an_name = ''
+    du_an_address = ''
+
+    if du_an_id:
+        try:
+            du_an = CongTrinh.objects.get(id=du_an_id)
+            du_an_name = du_an.ten_cong_trinh
+            du_an_address = getattr(du_an, 'dia_diem', '')
+        except CongTrinh.DoesNotExist:
+            pass
+        
+    period_data = defaultdict(lambda: {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0')})
+    nv_data     = defaultdict(lambda: {'hc': Decimal('0'), 'tc': Decimal('0'), 'luong': Decimal('0'), 'ten': '', 'nghe': ''})
+
+    for r in att_qs.values('date', 'employee__id', 'employee__name', 'employee__position',
+                            'employee__daily_wage', 'regular_workday', 'overtime_workday'):
+        d     = r['date']
+        hc    = r['regular_workday']  or Decimal('0')
+        tc    = r['overtime_workday'] or Decimal('0')
+        wage  = r['employee__daily_wage'] or Decimal('0')
+        luong = hc * wage + tc * (wage / Decimal('8'))
+        emp_id = r['employee__id']
+
+        if period == 'week':
+            w   = get_week_start(d)
+            key = f"{w.strftime('%d/%m')}–{(w + datetime.timedelta(days=6)).strftime('%d/%m/%Y')}"
+        elif period == 'month':
+            key = f"Tháng {d.month:02d}/{d.year}"
+        else:
+            key = str(d.year)
+
+        period_data[key]['hc']    += hc
+        period_data[key]['tc']    += tc
+        period_data[key]['luong'] += luong
+        nv_data[emp_id]['hc']    += hc
+        nv_data[emp_id]['tc']    += tc
+        nv_data[emp_id]['luong'] += luong
+        nv_data[emp_id]['ten']    = r['employee__name']
+        nv_data[emp_id]['nghe']   = r['employee__position'] or ''
+
+    if period == 'week':
+        def wk(k):
+            try:
+                day, month = k.split('–')[0].split('/')
+                return (int(month), int(day))
+            except Exception:
+                return (0, 0)
+        sorted_periods = sorted(period_data.keys(), key=wk)
+    elif period == 'month':
+        def mk(k):
+            try:
+                parts = k.replace('Tháng ', '').split('/')
+                return (int(parts[1]), int(parts[0]))
+            except Exception:
+                return (0, 0)
+        sorted_periods = sorted(period_data.keys(), key=mk)
+    else:
+        sorted_periods = sorted(period_data.keys())
+
+    nv_list = sorted(nv_data.values(), key=lambda x: x['luong'], reverse=True)
+
+    wb  = Workbook()
+    ws1 = wb.active
+    ws1.title = 'Tổng hợp'
+
+    bold      = Font(bold=True)
+    title_f   = Font(bold=True, size=13)
+    fill_g    = PatternFill(start_color='D9EAD3', end_color='D9EAD3', fill_type='solid')
+    fill_b    = PatternFill(start_color='CFE2F3', end_color='CFE2F3', fill_type='solid')
+    fill_o    = PatternFill(start_color='FCE5CD', end_color='FCE5CD', fill_type='solid')
+    ctr       = Alignment(horizontal='center', vertical='center')
+    bdr       = Border(left=Side(style='thin'), right=Side(style='thin'),
+                       top=Side(style='thin'), bottom=Side(style='thin'))
+
+    period_label = {'week': 'TUẦN', 'month': 'THÁNG', 'year': 'NĂM'}.get(period, 'THÁNG')
+
+    # Sheet 1
+    ws1.merge_cells('A1:E1')
+    ws1['A1'] = 'CÔNG TY TNHH XÂY DỰNG CPT'
+    ws1['A1'].font = title_f
+    ws1['A1'].alignment = ctr
+
+    ws1.merge_cells('A2:E2')
+    if du_an_name:
+        dia_chi = du_an_address or 'TP. Hồ Chí Minh'
+        ws1['A2'] = f"Địa chỉ: {dia_chi} | Dự án: {du_an_name}"
+    else:
+        ws1['A2'] = "Địa chỉ: TP. Hồ Chí Minh | Dự án: TẤT CẢ DỰ ÁN"
+    ws1['A2'].font = Font(size=11, italic=True)
+    ws1['A2'].alignment = ctr
+
+    ws1.merge_cells('A3:E3')
+    title_txt = f'BÁO CÁO CHI TIÊU THEO {period_label} — NĂM {nam}'
+    ws1['A3'] = title_txt
+    ws1['A3'].font = title_f
+    ws1['A3'].alignment = ctr
+    ws1.append([])
+
+    headers = ['Kỳ', 'Tổng HC', 'Tổng TC', 'Tổng lương (đ)', '% kỳ trước']
+    ws1.append(headers)
+    for c in range(1, 6):
+        cell = ws1.cell(row=5, column=c)
+        cell.font = bold
+        cell.fill = fill_g
+        cell.border = bdr
+        cell.alignment = ctr
+
+    ws1.column_dimensions['A'].width = 30
+    ws1.column_dimensions['B'].width = 12
+    ws1.column_dimensions['C'].width = 12
+    ws1.column_dimensions['D'].width = 20
+    ws1.column_dimensions['E'].width = 14
+
+    prev_luong = None
+    tong_hc = tong_tc = tong_luong = Decimal('0')
+    for ri, k in enumerate(sorted_periods, 5):
+        pd   = period_data[k]
+        pct  = ''
+        if prev_luong and prev_luong > 0:
+            pct = f"{float((pd['luong'] - prev_luong) / prev_luong * 100):+.1f}%"
+        prev_luong  = pd['luong']
+        tong_hc    += pd['hc']
+        tong_tc    += pd['tc']
+        tong_luong += pd['luong']
+        ws1.append([k, float(pd['hc']), float(pd['tc']), float(pd['luong']), pct])
+        for c in range(1, 6):
+            cell = ws1.cell(row=ri, column=c)
+            cell.border = bdr
+            cell.alignment = ctr
+            if c == 4:
+                cell.number_format = '#,##0'
+                if pd['luong'] > 0:
+                    cell.fill = fill_o
+
+    tr = len(sorted_periods) + 5
+    ws1.append(['TỔNG CỘNG', float(tong_hc), float(tong_tc), float(tong_luong), ''])
+    for c in range(1, 6):
+        cell = ws1.cell(row=tr, column=c)
+        cell.font = bold
+        cell.fill = fill_b
+        cell.border = bdr
+        cell.alignment = ctr
+        if c == 4:
+            cell.number_format = '#,##0'
+
+    # Sheet 2
+    ws2 = wb.create_sheet('Theo nhân viên')
+
+    ws2.merge_cells('A1:G1')
+    ws2['A1'] = 'CÔNG TY TNHH XÂY DỰNG CPT'
+    ws2['A1'].font = title_f
+    ws2['A1'].alignment = ctr
+
+    ws2.merge_cells('A2:G2')
+    if du_an_name:
+        dia_chi = du_an_address or 'TP. Hồ Chí Minh'
+        ws2['A2'] = f"Địa chỉ: {dia_chi} | Dự án: {du_an_name}"
+    else:
+        ws2['A2'] = "Địa chỉ: TP. Hồ Chí Minh | Dự án: TẤT CẢ DỰ ÁN"
+    ws2['A2'].font = Font(size=11, italic=True)
+    ws2['A2'].alignment = ctr
+
+    ws2.merge_cells('A3:G3')
+    ws2['A3'] = f'CHI TIẾT NHÂN VIÊN — NĂM {nam}'
+    ws2['A3'].font = title_f
+    ws2['A3'].alignment = ctr
+
+    nv_hdrs = ['STT', 'Họ tên', 'Nghề', 'Tổng HC', 'Tổng TC', 'Tổng lương (đ)', '% tổng']
+    for col_num, value in enumerate(nv_hdrs, 1):
+        cell = ws2.cell(row=5, column=col_num)
+        cell.value = value
+        cell.font = bold
+        cell.fill = fill_g
+        cell.border = bdr
+        cell.alignment = ctr
+
+    ws2.column_dimensions['A'].width = 6
+    ws2.column_dimensions['B'].width = 24
+    ws2.column_dimensions['C'].width = 10
+    ws2.column_dimensions['D'].width = 12
+    ws2.column_dimensions['E'].width = 12
+    ws2.column_dimensions['F'].width = 20
+    ws2.column_dimensions['G'].width = 10
+
+    tong_luong_nv = sum(nv['luong'] for nv in nv_list)
+    for i, nv in enumerate(nv_list, 1):
+        pct = f"{float(nv['luong'] / tong_luong_nv * 100):.1f}%" if tong_luong_nv > 0 else '0%'
+        ws2.append([i, nv['ten'], nv['nghe'], float(nv['hc']), float(nv['tc']), float(nv['luong']), pct])
+        
+        row_num = ws2.max_row
+        for c in range(1, 8):
+            cell = ws2.cell(row=row_num, column=c)
+            cell.border = bdr
+            cell.alignment = ctr
+            if c == 6:
+                cell.number_format = '#,##0'
+
+    tr2 = ws2.max_row + 1
+    ws2.append(['', 'TỔNG CỘNG', '', '', '', float(tong_luong_nv), '100%'])
+
+    for c in range(1, 8):
+        cell = ws2.cell(row=tr2, column=c)
+        cell.font = bold
+        cell.fill = fill_b
+        cell.border = bdr
+        cell.alignment = ctr
+        if c == 6:
+            cell.number_format = '#,##0'
+
+    fname = f"ChiTieu_{period}_{nam}"
+    if du_an_name:
+        safe_name = du_an_name.replace(' ', '_').replace('/', '').replace('\\', '').replace(':', '')
+        fname += f"_{safe_name}"
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = f'attachment; filename="{fname}.xlsx"'
+
+    wb.save(response)
+    return response

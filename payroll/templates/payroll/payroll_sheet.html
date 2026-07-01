@@ -1,476 +1,333 @@
 {% extends 'payroll/base.html' %}
 {% load humanize %}
 
-{% block content %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/vn.js"></script>
+{% block title %}Bảng Chấm Công - CPT{% endblock %}
 
+{% block extra_head %}
 <style>
-/* Cải thiện Toolbar để không bị vỡ bố cục khi nhiều nút */
-.toolbar-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 1.25rem;
-    flex-wrap: wrap;
-    background: var(--glass);
-    padding: 12px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-}
+    .toolbar-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 1.25rem;
+        flex-wrap: wrap;
+        background: var(--glass);
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+    }
 
-/* Date group pill */
-.date-pill {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--glass);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 5px 10px;
-    flex-shrink: 0;
-    height: 36px;
-    box-sizing: border-box;
-}
-.date-pill select,
-.date-pill input[type="text"] {
-    border: none;
-    background: transparent;
-    color: var(--text-main);
-    font-size: 0.83rem;
-    font-weight: 600;
-    outline: none;
-    cursor: pointer;
-    padding: 0;
-    max-width: 90px;
-}
-.date-pill .period-select {
-    width: 220px;
-    max-width: 220px;
-}
-.date-pill input[type="text"] {
-    font-weight: 400;
-    max-width: 80px;
-}
-.date-range-tag {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    background: var(--border);
-    border-radius: 999px;
-    padding: 1px 7px;
-    white-space: nowrap;
-    display: inline-block;
-}
-.sep {
-    width: 1px;
-    height: 24px;
-    background: var(--border);
-    flex-shrink: 0;
-    margin: 0 2px;
-}
+    .date-pill {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--glass);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 5px 10px;
+        flex-shrink: 0;
+        height: 36px;
+        box-sizing: border-box;
+    }
 
-/* Icon nav buttons */
-.nav-btn {
-    width: 30px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    background: var(--glass);
-    color: var(--text-muted);
-    text-decoration: none;
-    flex-shrink: 0;
-    font-size: 0.75rem;
-    transition: background 0.15s, color 0.15s;
-}
-.nav-btn:hover {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-}
+    .date-pill select {
+        border: none;
+        background: transparent;
+        color: var(--text-main);
+        font-size: 0.83rem;
+        font-weight: 600;
+        outline: none;
+        cursor: pointer;
+    }
 
-/* Search inside toolbar */
-.toolbar-search {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex: 1;
-    min-width: 0;
-}
-.toolbar-search select {
-    font-size: 0.8rem;
-    padding: 0 8px;
-    height: 36px;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    background: var(--glass);
-    color: var(--text-main);
-    flex-shrink: 0;
-}
-.toolbar-search .search-box {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    padding: 0 10px;
-    height: 36px;
-    background: var(--glass);
-    flex: 1;
-    min-width: 100px;
-}
-.toolbar-search .search-box i {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    flex-shrink: 0;
-}
-.toolbar-search .search-box input {
-    border: none;
-    background: transparent;
-    outline: none;
-    font-size: 0.83rem;
-    color: var(--text-main);
-    width: 100%;
-}
+    .date-pill .period-select {
+        width: 220px;
+        max-width: 220px;
+    }
 
-/* Action buttons */
-.toolbar-row .btn {
-    height: 36px;
-    padding: 0 11px;
-    font-size: 0.8rem;
-    white-space: nowrap;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    box-sizing: border-box;
-}
-.btn-danger {
-    background: #ef4444;
-    color: #fff !important;
-    border-color: #ef4444 !important;
-}
-.btn-danger:hover { background: #dc2626; border-color: #dc2626 !important; }
+    .sep {
+        width: 1px;
+        height: 24px;
+        background: var(--border);
+        flex-shrink: 0;
+        margin: 0 2px;
+    }
 
-/* Preserved styles for table/modal/form */
-.btn-lg { padding: 1rem 3rem; }
-.form-footer { margin-top: 1.5rem; display: flex; justify-content: flex-end; }
-.payroll-form { width: 100%; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-.modal-header h2 { font-size: 1.25rem; margin: 0; }
-.btn-close { padding: 0.25rem 0.5rem !important; background: none !important; border: none !important; color: var(--text-main); font-size: 1.5rem; cursor: pointer; }
-.form-hint { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; }
-.empty-state { text-align: center; padding: 4rem !important; color: var(--text-muted); }
-.empty-state i { font-size: 2.5rem; display: block; margin-bottom: 1rem; opacity: 0.5; }
-.empty-state a { color: var(--primary); font-weight: bold; text-decoration: underline; }
-.action-group { display: flex; gap: 0.5rem; justify-content: center; }
+    .nav-btn {
+        width: 30px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--glass);
+        color: var(--text-muted);
+        text-decoration: none;
+        flex-shrink: 0;
+        font-size: 0.75rem;
+        transition: background 0.15s, color 0.15s;
+    }
 
-/* Fix hiển thị trên mobile */
-@media (max-width: 768px) {
-    .toolbar-search { order: 2; width: 100%; }
-    .date-pill { order: 1; }
-    .nav-btn { order: 1; }
-    .sep { display: none; }
-    .toolbar-row .btn { flex: 1; justify-content: center; }
-}
+    .nav-btn:hover {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+    }
 
-.table-scrollbar-proxy {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 900;
-    height: 22px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border: 1px solid var(--border);
-    border-width: 1px 0 0;
-    border-radius: 0;
-    background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.16);
-    display: none;
-}
-.table-scrollbar-proxy.is-visible { display: block; }
-.table-scrollbar-proxy-inner { height: 1px; }
-.table-scrollbar-proxy, .table-scrollbar-proxy * { -ms-overflow-style: auto; scrollbar-width: auto; }
-.table-scrollbar-proxy::-webkit-scrollbar { display: block !important; height: 12px !important; }
-.table-scrollbar-proxy::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.06); }
-.table-scrollbar-proxy::-webkit-scrollbar-thumb { background: rgba(249, 115, 22, 0.55); border-radius: 999px; }
-body.has-table-scrollbar-proxy { padding-bottom: 30px; }
+    .toolbar-search {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        flex: 1;
+        min-width: 0;
+    }
 
-.payroll-sheet-table-container {
-    --payroll-visible-rows: 12;
-    --payroll-header-row-height: 34px;
-    max-height: calc(var(--payroll-header-row-height) * 2 + var(--payroll-visible-rows) * 42px + 48px);
-    overflow: auto !important;
-    overscroll-behavior: contain;
-    border: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.96);
-}
+    .toolbar-search .search-box {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        padding: 0 10px;
+        height: 36px;
+        background: var(--glass);
+        flex: 1;
+    }
 
-.payroll-sheet-table-container::-webkit-scrollbar {
-    display: block !important;
-    width: 10px !important;
-    height: 10px !important;
-}
+    .toolbar-search .search-box i {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+    }
 
-.payroll-sheet-table-container::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.06) !important;
-}
+    .toolbar-search .search-box input {
+        border: none;
+        background: transparent;
+        outline: none;
+        font-size: 0.83rem;
+        color: var(--text-main);
+        width: 100%;
+    }
 
-.payroll-sheet-table-container::-webkit-scrollbar-thumb {
-    background: rgba(249, 115, 22, 0.5) !important;
-    border-radius: 999px !important;
-}
+    .toolbar-row .btn {
+        height: 36px;
+        padding: 0 11px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        box-sizing: border-box;
+    }
 
-.payroll-sheet-table-container .payroll-table {
-    margin-top: 0;
-}
+    .btn-danger {
+        background: #ef4444;
+        color: #fff !important;
+        border-color: #ef4444 !important;
+    }
 
-.payroll-sheet-table-container .payroll-table thead th {
-    position: sticky;
-    top: 0;
-    z-index: 70;
-    background: #fff7ed;
-    box-shadow: 0 1px 0 var(--border);
-}
+    .btn-danger:hover {
+        background: #dc2626;
+        border-color: #dc2626 !important;
+    }
 
-.payroll-sheet-table-container .payroll-table thead tr:nth-child(2) th {
-    top: var(--payroll-header-row-height);
-    z-index: 69;
-}
+    .form-footer {
+        margin-top: 1.5rem;
+        display: flex;
+        justify-content: flex-end;
+    }
 
-.payroll-sheet-table-container .payroll-table thead th.stt-col,
-.payroll-sheet-table-container .payroll-table thead th.name-col {
-    z-index: 90;
-}
+    .payroll-form {
+        width: 100%;
+    }
 
-.payroll-sheet-table-container .payroll-table tbody tr.summary-row td {
-    position: sticky;
-    bottom: 0;
-    z-index: 65;
-    background: var(--surface, #fff8f0) !important;
-    box-shadow: 0 -2px 0 var(--primary), 0 -8px 18px rgba(15, 23, 42, 0.12);
-}
+    .btn-lg {
+        padding: 1rem 3rem;
+    }
 
-.payroll-sheet-table-container .payroll-table tbody tr.summary-row td.stt-col,
-.payroll-sheet-table-container .payroll-table tbody tr.summary-row td.name-col {
-    z-index: 85;
-}
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
 
-.payroll-sheet-table-container .payroll-table tbody tr.summary-row:hover td {
-    background: var(--surface, #fff8f0) !important;
-}
+    .modal-header h2 {
+        font-size: 1.25rem;
+        margin: 0;
+    }
 
+    .btn-close {
+        padding: 0.25rem 0.5rem !important;
+        background: none !important;
+        border: none !important;
+        color: var(--text-main);
+        font-size: 1.5rem;
+        cursor: pointer;
+    }
+
+    .form-hint {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-bottom: 1rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem !important;
+        color: var(--text-muted);
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .empty-state a {
+        color: var(--primary);
+        font-weight: bold;
+        text-decoration: underline;
+    }
+
+    .action-group {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+    }
+
+    /* Sticky scrollbar proxy */
+    .table-scrollbar-proxy {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 900;
+        height: 22px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        border: 1px solid var(--border);
+        border-width: 1px 0 0;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 -6px 16px rgba(15, 23, 42, 0.16);
+        display: none;
+    }
+
+    .table-scrollbar-proxy.is-visible {
+        display: block;
+    }
+
+    .table-scrollbar-proxy-inner {
+        height: 1px;
+    }
+
+    body.has-table-scrollbar-proxy {
+        padding-bottom: 30px;
+    }
+
+    /* Table container */
+    .payroll-sheet-table-container {
+        --payroll-visible-rows: 12;
+        --payroll-header-row-height: 34px;
+        max-height: calc(var(--payroll-header-row-height) * 2 + var(--payroll-visible-rows) * 42px + 48px);
+        overflow: auto !important;
+        overscroll-behavior: contain;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.96);
+    }
+
+    .payroll-sheet-table-container .payroll-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 70;
+        background: #fff7ed;
+        box-shadow: 0 1px 0 var(--border);
+    }
+
+    .payroll-sheet-table-container .payroll-table thead tr:nth-child(2) th {
+        top: var(--payroll-header-row-height);
+        z-index: 69;
+    }
+
+    .payroll-sheet-table-container .payroll-table thead th.stt-col,
+    .payroll-sheet-table-container .payroll-table thead th.name-col {
+        z-index: 90;
+    }
+
+    .payroll-sheet-table-container .payroll-table tbody tr.summary-row td {
+        position: sticky;
+        bottom: 0;
+        z-index: 65;
+        background: var(--surface, #fff8f0) !important;
+        box-shadow: 0 -2px 0 var(--primary), 0 -8px 18px rgba(15, 23, 42, 0.12);
+    }
+
+    @media (max-width: 768px) {
+        .toolbar-search {
+            order: 2;
+            width: 100%;
+        }
+
+        .date-pill,
+        .nav-btn {
+            order: 1;
+        }
+
+        .sep {
+            display: none;
+        }
+    }
 </style>
+{% endblock %}
 
+{% block content %}
 <div class="card">
+
+    {# ── Toolbar ── #}
     <div class="toolbar-row">
+        {% include "payroll/components/period_picker.html" %}
+        <div class="sep"></div>
+        {% include "payroll/components/search_form.html" %}
+        <div class="sep"></div>
 
-    <!-- 1. View type + period filter -->
-    <div class="date-pill">
-        <select id="view-type-select" title="Chọn kiểu lọc">
-            <option value="week"  {% if view_type == 'week'  %}selected{% endif %}>Tuần</option>
-            <option value="month" {% if view_type == 'month' %}selected{% endif %}>Tháng</option>
-        </select>
+        {% if can_edit %}
+        <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
+            <i class="fas fa-user-plus"></i> Thêm
+        </button>
+        <button onclick="document.getElementById('import-excel-modal').style.display='block'" class="btn btn-outline">
+            <i class="fas fa-file-import"></i> Nhập Excel
+        </button>
+        {% endif %}
 
-        <select id="period-select" class="period-select" title="Chọn kỳ">
-            {% if view_type == 'month' %}
-                {% for m in available_months %}
-                <option value="{{ m.date_str }}"
-                    {% if target_date|date:'Y' == m.year|stringformat:'s' and target_date|date:'n' == m.month|stringformat:'s' %}selected{% endif %}>
-                    {{ m.label }}
-                </option>
-                {% endfor %}
-            {% else %}
-                {% for w in available_weeks %}
-                <option value="{{ w.date_str }}"
-                    {% if start_date == w.start %}selected{% endif %}>
-                    {{ w.label }}
-                </option>
-                {% endfor %}
-            {% endif %}
-        </select>
+        <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}"
+            class="btn btn-outline">
+            <i class="fas fa-chart-column"></i> Thống kê
+        </a>
+        <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&export=excel{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
+            class="btn btn-primary">
+            <i class="fas fa-file-excel"></i> Xuất Excel
+        </a>
+
+        {% if can_edit %}
+        <form method="POST" action="{% url 'payroll:delete_all_data' %}" style="display:inline;"
+            onsubmit="return confirm('CẢNH BÁO: Sẽ xóa toàn bộ chấm công{% if du_an_obj %} của dự án {{ du_an_obj.ten_cong_trinh }}{% endif %}. Bạn có chắc không?')">
+            {% csrf_token %}
+            <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
+            <button type="submit" class="btn btn-danger"><i class="fas fa-trash-alt"></i> Xóa tất cả</button>
+        </form>
+        {% endif %}
     </div>
 
-    <!-- 2. Period nav -->
-    <a href="#" id="btn-prev" class="nav-btn" title="Kỳ trước"><i class="fas fa-chevron-left"></i></a>
-    <a href="#" id="btn-next" class="nav-btn" title="Kỳ sau"><i class="fas fa-chevron-right"></i></a>
-    <input type="hidden" name="q" value="{{ search_query }}">
-    <div class="sep"></div>
-
-    <!-- 3. Search theo tên -->
-    <form method="GET" class="toolbar-search" style="flex: 0 1 260px;">
-        <input type="hidden" name="view_type" value="{{ view_type }}">
-        <input type="hidden" name="date" value="{{ start_date|date:'Y-m-d' }}">
-        <div class="search-box">
-            <i class="fas fa-search"></i>
-            <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên...">
-        </div>
-        <button type="submit" class="btn btn-outline">Tìm</button>
-        {% if search_query %}
-        <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}" class="btn btn-outline" title="Xóa lọc">✕</a>
-        {% endif %}
-    </form>
-
-    <div class="sep"></div>
-
-    <!-- 3. Action buttons -->
-    {% if can_edit %}
-    <button onclick="document.getElementById('add-worker-modal').style.display='block'" class="btn btn-outline">
-        <i class="fas fa-user-plus"></i> Thêm
-    </button>
-    <button onclick="document.getElementById('import-excel-modal').style.display='block'" class="btn btn-outline">
-        <i class="fas fa-file-import"></i> Nhập Excel
-    </button>
-    {% endif %}
-    <a href="{% url 'payroll:payroll_statistics' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}" class="btn btn-outline">
-        <i class="fas fa-chart-column"></i> Thống kê
-    </a>
-    <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&export=excel" class="btn btn-primary">
-        <i class="fas fa-file-excel"></i> Xuất Excel
-    </a>
-    {% if can_edit %}
-    <a href="{% url 'payroll:delete_all_data' %}" class="btn btn-danger"
-        onclick="return confirm('CẢNH BÁO: Hành động này sẽ xóa TOÀN BỘ nhân viên và dữ liệu chấm công. Bạn có chắc chắn không?')">
-        <i class="fas fa-trash-alt"></i> Xóa tất cả
-    </a>
-    {% endif %}
-
-</div>
-
-    <form action="{% url 'payroll:save_attendance' %}" method="POST" class="payroll-form" {% if not can_edit %}style="pointer-events: none; opacity: 0.6;"{% endif %}>
+    {# ── Form chấm công ── #}
+    <form action="{% url 'payroll:save_attendance' %}" method="POST" class="payroll-form" {% if not can_edit %}style="pointer-events:none; opacity:0.6;"{% endif %}>
         {% csrf_token %}
         <input type="hidden" name="current_date" value="{{ target_date|date:'Y-m-d' }}">
         <input type="hidden" name="view_type" value="{{ view_type }}">
+        <input type="hidden" name="du_an_id" value="{{ du_an_id }}">
 
-        <div class="table-container payroll-sheet-table-container">
-            <table class="payroll-table">
-                <colgroup>
-                    <col class="stt-col">
-                    <col class="name-col">
-                    <col class="position-col">
-                    {% for d in dates %}
-                    <col class="hc-col">
-                    <col class="tc-col">
-                    {% endfor %}
-                    <col class="total-hc-col">
-                    <col class="total-tc-col">
-                    <col class="wage-col">
-                    <col class="adj-col">
-                    <col class="total-pay-col">
-                    <col class="actions-col">
-                </colgroup>
-                <thead>
-                    <tr>
-                        <th rowspan="2" class="stt-col">STT</th>
-                        <th rowspan="2" class="name-col">Họ tên</th>
-                        <th rowspan="2" class="position-col">Nghề</th>
-                        {% for header in date_headers %}
-                        <th colspan="2" class="date-header">{{ header.display }}</th>
-                        {% endfor %}
-                        <th rowspan="2" class="total-hc-col">Tổng HC</th>
-                        <th rowspan="2" class="total-tc-col">Tổng TC</th>
-                        <th rowspan="2" class="wage-col">Lương ngày</th>
-                        <th rowspan="2" class="adj-col">Tăng/Giảm</th>
-                        <th rowspan="2" class="total-pay-col">Tổng lãnh</th>
-                        <th rowspan="2" class="actions-col">Thao tác</th>
-                    </tr>
-                    <tr>
-                        {% for header in date_headers %}
-                        <th class="hc-col">HC</th>
-                        <th class="tc-col">TC</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in payroll_data %}
-                    <tr class="payroll-row" data-wage="{{ row.employee.daily_wage|floatformat:0 }}">
-                        <td class="stt-col">{{ forloop.counter }}</td>
-                        <td class="name-col">{{ row.employee.name }}</td>
-                        <td class="position-col">{{ row.employee.position }}</td>
-                        {% for att in row.daily_attendance %}
-                        <td class="hc-col">
-                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_hc"
-                                value="{{ att.hc_symbol }}" class="att-input att-hc" data-placeholder="x /" maxlength="4" {% if not can_edit %}disabled{% endif %}>
-                        </td>
-                        <td class="tc-col">
-                            <input type="text" name="att_{{ row.employee.id }}_{{ att.date|date:'Y-m-d' }}_tc"
-                                value="{{ att.tc_symbol }}" class="att-input att-tc" data-placeholder="0.0" maxlength="6" {% if not can_edit %}disabled{% endif %}>
-                        </td>
-                        {% endfor %}
-                            <td class="total-hc-col cell-total-hc">{{ row.total_hc|floatformat:"0" }}</td>
-                            <td class="total-tc-col cell-total-tc">{{ row.total_tc|floatformat:"0" }}</td>
-
-                            <!-- Lương ngày -->
-                            <td class="wage-col">{{ row.employee.daily_wage|floatformat:0|intcomma }} đ</td>
-                        <td class="adj-col">
-                            <div style="display:flex; gap:4px;">
-                                <input type="number" 
-                                    name="adj_{{ row.employee.id }}_{{ start_date|date:'Y-m-d' }}_{{ end_date|date:'Y-m-d' }}"
-                                    value="{{ row.adjustment|floatformat:0 }}" 
-                                    class="att-input wage-input adj-input">
-                            </div>
-                        </td>
-                        <td class="total-pay-col cell-total-pay">{{ row.total_pay|floatformat:0|intcomma }} đ</td>
-                        <td class="actions-col">
-                            {% if can_edit %}
-                            <div class="action-group">
-                                <button type="button" class="btn-icon btn-edit"
-                                    onclick="openEditModal('{{ row.employee.id }}', '{{ row.employee.name }}', '{{ row.employee.position }}', '{{ row.employee.daily_wage|floatformat:0 }}')">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <a href="{% url 'payroll:delete_employee' row.employee.id %}"
-                                    class="btn-icon btn-delete"
-                                    onclick="return confirm('Bạn có chắc chắn muốn xóa nhân viên này?')">
-                                    <i class="fas fa-trash"></i>
-                                </a>
-                            </div>
-                            {% else %}
-                            <span style="color: #999; font-size: 12px;">Chỉ xem</span>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="100%" class="empty-state">
-                            <i class="fas fa-users-slash"></i>
-                            Chưa có dữ liệu nhân viên. <br>
-                            <a href="#" onclick="document.getElementById('add-worker-modal').style.display='block'">
-                                Thêm nhân viên ngay
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    {% if payroll_data %}
-                    <tr class="summary-row" style="font-weight:700; background: var(--surface, #fff8f0); border-top: 2px solid var(--primary);">
-                        <td colspan="3" style="text-align:center; color: var(--primary);">
-                            <i class="fas fa-sigma"></i> TỔNG CỘNG
-                        </td>
-                        {% for sd in summary_daily %}
-                        <td class="hc-col" style="color: var(--primary);">
-                            {{ sd.hc|floatformat:"0" }}
-                        </td>
-                        <td class="tc-col" style="color: #888;">
-                            {% if sd.tc %}{{ sd.tc|floatformat:"0" }}{% endif %}
-                        </td>
-                        {% endfor %}
-                        <td class="total-hc-col" style="color: var(--primary);">{{ summary_total_hc|floatformat:"0" }}</td>
-                        <td class="total-tc-col">{{ summary_total_tc|floatformat:"0" }}</td>
-                        <td class="wage-col">—</td>
-                        <td class="adj-col">—</td>
-                        <td class="total-pay-col" style="color: var(--primary);">
-                            {{ summary_total_pay|floatformat:0|intcomma }} đ
-                        </td>
-                        <td class="actions-col">—</td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
+        {% include "payroll/partials/payroll_table.html" %}
 
         <div class="form-footer">
             {% if can_edit %}
@@ -478,372 +335,66 @@ body.has-table-scrollbar-proxy { padding-bottom: 30px; }
                 <i class="fas fa-save"></i> LƯU CHẤM CÔNG
             </button>
             {% else %}
-            <div style="background: #f0f0f0; padding: 15px; border-radius: 4px; text-align: center; color: #666;">
-                <i class="fas fa-lock"></i> Bạn đang ở chế độ xem. Cần tài khoản Cấp 1 hoặc Cấp 2 để chỉnh sửa dữ liệu.
+            <div style="background:#f0f0f0;padding:15px;border-radius:4px;text-align:center;color:#666;">
+                <i class="fas fa-lock"></i> Bạn đang ở chế độ xem. Cần tài khoản Cấp 1 hoặc Cấp 2 để chỉnh sửa.
             </div>
             {% endif %}
         </div>
     </form>
+
     <div class="table-scrollbar-proxy" aria-hidden="true">
         <div class="table-scrollbar-proxy-inner"></div>
     </div>
 </div>
 
-<!-- Modal Thêm Người Làm -->
-{% if can_edit %}
-<div id="add-worker-modal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Thêm Người Làm Công</h2>
-            <button onclick="document.getElementById('add-worker-modal').style.display='none'"
-                class="btn btn-close">&times;</button>
-        </div>
-        <form action="{% url 'payroll:add_employee' %}" method="POST">
-            {% csrf_token %}
-            <div class="form-group">
-                <label>Họ và tên</label>
-                <input type="text" name="name" required class="form-input">
-            </div>
-            <div class="form-group">
-                <label>Ngày sinh</label>
-                <input type="date" name="date_of_birth" class="form-input">
-            </div>
-            <div class="form-group">
-                <label>Nghề / Chức vụ</label>
-                <select name="position" class="form-input">
-                    <option value="Tho">Thợ</option>
-                    <option value="Phu">Phụ</option>
-                    <option value="Cai">Cai</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Lương ngày (VNĐ)</label>
-                <input type="number" name="daily_wage" required class="form-input" placeholder="Ví dụ: 400000">
-            </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">TẠO NGƯỜI LÀM</button>
-        </form>
-    </div>
-</div>
-{% endif %}
+{# ── Modals ── #}
+{% include "payroll/partials/modal_add_worker.html" %}
+{% include "payroll/partials/modal_import_excel.html" %}
+{% include "payroll/partials/modal_edit_worker.html" %}
+{% include "payroll/partials/modal_log.html" %}
 
-<!-- Modal Nhập Excel -->
-{% if can_edit %}
-<div id="import-excel-modal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Nhập Dữ Liệu Từ Excel</h2>
-            <button onclick="document.getElementById('import-excel-modal').style.display='none'"
-                class="btn btn-close">&times;</button>
-        </div>
-        <form action="{% url 'payroll:import_excel' %}" method="POST" enctype="multipart/form-data">
-            {% csrf_token %}
-            <input type="hidden" name="current_date" value="{{ start_date|date:'Y-m-d' }}">
-            <div class="form-group">
-                <label>Chọn file Excel (.xlsx)</label>
-                <input type="file" name="excel_file" accept=".xlsx" required class="form-input">
-            </div>
-            <p class="form-hint">* File Excel phải đúng định dạng đã xuất từ hệ thống.</p>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">TẢI LÊN & CẬP NHẬT</button>
-        </form>
-    </div>
-</div>
-{% endif %}
-<!-- Modal Chỉnh Sửa -->
-{% if can_edit %}
-<div id="edit-worker-modal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Chỉnh Sửa Thông Tin</h2>
-            <button onclick="document.getElementById('edit-worker-modal').style.display='none'"
-                class="btn btn-close">&times;</button>
-        </div>
-        <form id="edit-worker-form" method="POST">
-            {% csrf_token %}
-            <div class="form-group">
-                <label>Họ và tên</label>
-                <input type="text" name="name" id="edit-name" required class="form-input">
-            </div>
-            <div class="form-group">
-                <label>Ngày sinh</label>
-                <input type="date" name="date_of_birth" id="edit-date-of-birth" class="form-input">
-            </div>
-            <div class="form-group">
-                <label>Nghề / Chức vụ</label>
-                <select name="position" id="edit-position" class="form-input">
-                    <option value="Tho">Thợ</option>
-                    <option value="Phu">Phụ</option>
-                    <option value="Cai">Cai</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Lương ngày (VNĐ)</label>
-                <input type="number" name="daily_wage" id="edit-wage" required class="form-input">
-            </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">CẬP NHẬT</button>
-        </form>
-    </div>
-</div>
-{% endif %}
+{# ── JS ── #}
+{% include "payroll/partials/payroll_realtime_calc.html" %}
 
-<div id="log-modal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2>Lịch sử Tăng/Giảm</h2>
-            <button onclick="closeLogModal()" class="btn btn-close">&times;</button>
-        </div>
-
-        <div id="log-content">
-            Đang tải...
-        </div>
-    </div>
-</div>
 <script>
-    function openEditModal(id, name, position, wage) {
-        document.getElementById('edit-name').value = name;
-        document.getElementById('edit-position').value = position;
-        document.getElementById('edit-wage').value = wage;
-        document.getElementById('edit-worker-form').action = '{% url "payroll:edit_employee" 0 %}'.replace('0', id);
-        document.getElementById('edit-worker-modal').style.display = 'block';
-    }
+    // Đóng modal khi click nền
+    window.onclick = function (e) {
+        if (e.target.classList.contains('modal')) e.target.style.display = 'none';
+    };
 
-    function goToPeriod(dateStr, viewType) {
-        const params = new URLSearchParams(window.location.search);
-        params.set('date', dateStr);
-        params.set('view_type', viewType);
-        params.delete('export');
-        window.location.href = '?' + params.toString();
-    }
-
-    // Close modals when clicking outside
-    window.onclick = function (event) {
-        if (event.target.classList.contains('modal')) {
-            event.target.style.display = 'none';
-        }
-    }
-
-    const viewTypeSelect = document.getElementById('view-type-select');
-    const periodSelect = document.getElementById('period-select');
-
-    viewTypeSelect.addEventListener('change', function () {
-        // Khi đổi view type, reload để backend tự chọn kỳ hiện tại
-        const params = new URLSearchParams(window.location.search);
-        params.set('view_type', this.value);
-        params.set('date', '{{ start_date|date:"Y-m-d" }}');
-        params.delete('export');
-        window.location.href = '?' + params.toString();
-    });
-
-    periodSelect.addEventListener('change', function () {
-        goToPeriod(this.value, viewTypeSelect.value);
-    });
-
-    (function initPayrollLimitedRows() {
-        const tableContainer = document.querySelector('.payroll-sheet-table-container');
-        const firstHeaderRow = document.querySelector('.payroll-table thead tr:first-child');
-        if (!tableContainer || !firstHeaderRow) return;
-
-        function updateHeaderRowHeight() {
-            tableContainer.style.setProperty('--payroll-header-row-height', firstHeaderRow.offsetHeight + 'px');
-            window.dispatchEvent(new Event('payroll:layoutchange'));
-        }
-
-        window.addEventListener('load', updateHeaderRowHeight);
-        window.addEventListener('resize', updateHeaderRowHeight);
-        updateHeaderRowHeight();
-
-        if ('ResizeObserver' in window) {
-            new ResizeObserver(updateHeaderRowHeight).observe(firstHeaderRow);
-        }
-    })();
-
-    // Period navigation
-    document.getElementById('btn-prev').addEventListener('click', function (e) {
-        e.preventDefault();
-        if (periodSelect.selectedIndex > 0) {
-            periodSelect.selectedIndex--;
-            goToPeriod(periodSelect.value, viewTypeSelect.value);
-        }
-    });
-
-    document.getElementById('btn-next').addEventListener('click', function (e) {
-        e.preventDefault();
-        if (periodSelect.selectedIndex < periodSelect.options.length - 1) {
-            periodSelect.selectedIndex++;
-            goToPeriod(periodSelect.value, viewTypeSelect.value);
-        }
-    });
-
-    (function initTableScrollbarProxy() {
-        const tableContainer = document.querySelector('.table-container');
+    // Sticky scrollbar proxy
+    (function () {
+        const tc = document.querySelector('.table-container');
         const proxy = document.querySelector('.table-scrollbar-proxy');
-        const proxyInner = document.querySelector('.table-scrollbar-proxy-inner');
-        if (!tableContainer || !proxy || !proxyInner) return;
-
+        const pi = document.querySelector('.table-scrollbar-proxy-inner');
+        if (!tc || !proxy || !pi) return;
         document.body.appendChild(proxy);
-
         let syncing = false;
-
-        function updateProxy() {
-            const scrollWidth = tableContainer.scrollWidth;
-            const clientWidth = tableContainer.clientWidth;
-            proxyInner.style.width = scrollWidth + 'px';
-            proxy.scrollLeft = tableContainer.scrollLeft;
-
-            const shouldShow = scrollWidth > clientWidth + 1;
-            proxy.classList.toggle('is-visible', shouldShow);
-            document.body.classList.toggle('has-table-scrollbar-proxy', shouldShow);
-            window.dispatchEvent(new Event('payroll:layoutchange'));
+        function update() {
+            pi.style.width = tc.scrollWidth + 'px';
+            proxy.scrollLeft = tc.scrollLeft;
+            const show = tc.scrollWidth > tc.clientWidth + 1;
+            proxy.classList.toggle('is-visible', show);
+            document.body.classList.toggle('has-table-scrollbar-proxy', show);
         }
-
-        tableContainer.addEventListener('scroll', function () {
-            if (syncing) return;
-            syncing = true;
-            proxy.scrollLeft = tableContainer.scrollLeft;
-            syncing = false;
-        });
-
-        proxy.addEventListener('scroll', function () {
-            if (syncing) return;
-            syncing = true;
-            tableContainer.scrollLeft = proxy.scrollLeft;
-            syncing = false;
-        });
-
-        window.addEventListener('resize', updateProxy);
-        window.addEventListener('load', updateProxy);
-        updateProxy();
-
-        if ('ResizeObserver' in window) {
-            new ResizeObserver(updateProxy).observe(tableContainer);
-        }
+        tc.addEventListener('scroll', () => { if (!syncing) { syncing = true; proxy.scrollLeft = tc.scrollLeft; syncing = false; } });
+        proxy.addEventListener('scroll', () => { if (!syncing) { syncing = true; tc.scrollLeft = proxy.scrollLeft; syncing = false; } });
+        window.addEventListener('resize', update);
+        window.addEventListener('load', update);
+        update();
+        if ('ResizeObserver' in window) new ResizeObserver(update).observe(tc);
     })();
 
-// ── TÍNH TIỀN REAL-TIME ──────────────────────────────────
-
-function formatVND(amount) {
-    return Math.round(amount).toLocaleString('vi-VN') + ' đ';
-}
-
-function parseAttendanceValue(value) {
-    const raw = String(value || '').trim();
-    if (!raw) return 0;
-    if (raw.toLowerCase() === 'x') return 1;
-    if (raw === '/' || raw === '\\') return 0.5;
-    const parsed = parseFloat(raw.replace(/,/g, '.'));
-    return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function recalcRow(row) {
-    const wage = parseFloat(row.dataset.wage.replace(/,/g, '').replace(/\./g, '')) || 0;
-    let totalHc = 0;
-    let totalTc = 0;
-
-    row.querySelectorAll('.att-hc').forEach(function(input) {
-        totalHc += parseAttendanceValue(input.value);
-    });
-    row.querySelectorAll('.att-tc').forEach(function(input) {
-        totalTc += parseAttendanceValue(input.value);
-    });
-
-    const adjInput = row.querySelector('.adj-input');
-    const adj = parseFloat((adjInput ? adjInput.value : '').replace(/,/g, '.')) || 0;
-
-    const totalPay = (totalHc * wage) + (totalTc * (wage / 8)) + adj;
-
-    const cellHc  = row.querySelector('.cell-total-hc');
-    const cellTc  = row.querySelector('.cell-total-tc');
-    const cellPay = row.querySelector('.cell-total-pay');
-
-    if (cellHc)  cellHc.textContent  = Number.isInteger(totalHc) ? totalHc : totalHc.toFixed(1);
-    if (cellTc)  cellTc.textContent  = Number.isInteger(totalTc) ? totalTc : totalTc.toFixed(1);
-    if (cellPay) {
-        cellPay.textContent  = formatVND(totalPay);
-        cellPay.style.color      = totalPay > 0 ? 'var(--primary)' : '';
-        cellPay.style.fontWeight = totalPay > 0 ? '700' : '';
-    }
-}
-
-document.querySelectorAll('.payroll-row').forEach(function(row) {
-    row.querySelectorAll('.att-hc, .att-tc').forEach(function(input) {
-        input.addEventListener('input', function() { recalcRow(row); });
-    });
-    const adjInput = row.querySelector('.adj-input');
-    if (adjInput) {
-        adjInput.addEventListener('input', function() { recalcRow(row); });
-    }
-});
-document.querySelectorAll('.att-input').forEach(input => {
-    const placeholder = input.dataset.placeholder;
-
-    input.addEventListener('focus', function() {
-        if (this.value === '') {
-            this._showingPlaceholder = true;
-            this.value = placeholder;
-            this.style.color = '#999';
-        }
-    });
-
-    input.addEventListener('keydown', function() {
-        // Xóa placeholder ngay khi bắt đầu nhấn phím
-        if (this._showingPlaceholder) {
-            this._showingPlaceholder = false;
-            this.value = '';
-            this.style.color = '';
-        }
-    });
-
-    input.addEventListener('input', function() {
-        if (this._showingPlaceholder) {
-            this._showingPlaceholder = false;
-            // Giữ lại ký tự vừa gõ, bỏ phần placeholder
-            const typed = this.value.replace(placeholder, '');
-            this.value = typed;
-            this.style.color = '';
-        } else {
-            this.style.color = '';
-        }
-    });
-
-    input.addEventListener('blur', function() {
-        if (this._showingPlaceholder || this.value === placeholder) {
-            this._showingPlaceholder = false;
-            this.value = '';
-            this.style.color = '';
-        }
-    });
-
-    if (input.value !== '') {
-        input.style.color = '';
-    }
-});
-
-function openLogModal(employeeId) {
-    document.getElementById('log-modal').style.display = 'block';
-
-    fetch(`/api/log-adjustment/${employeeId}/`)
-        .then(res => res.json())
-        .then(data => {
-            let html = "<table style='width:100%'>";
-            html += "<tr><th>Ngày</th><th>Số tiền tăng</th><th>Số tiền giảm</th></tr>";
-
-            data.logs.forEach(item => {
-                html += `
-                    <tr>
-                        <td>${item.ngay}</td>
-                        <td style="color:green">+${item.tang}</td>
-                        <td style="color:red">-${item.giam}</td>
-                    </tr>
-                `;
-            });
-
-            html += "</table>";
-
-            document.getElementById('log-content').innerHTML = html;
-        });
-}
-function closeLogModal() {
-    document.getElementById('log-modal').style.display = 'none';
-}
+    // Header height cho sticky row thứ 2
+    (function () {
+        const wrap = document.querySelector('.payroll-sheet-table-container');
+        const hRow = document.querySelector('.payroll-table thead tr:first-child');
+        if (!wrap || !hRow) return;
+        function upd() { wrap.style.setProperty('--payroll-header-row-height', hRow.offsetHeight + 'px'); }
+        window.addEventListener('load', upd);
+        window.addEventListener('resize', upd);
+        upd();
+        if ('ResizeObserver' in window) new ResizeObserver(upd).observe(hRow);
+    })();
 </script>
-
 {% endblock %}

@@ -1,0 +1,35 @@
+{# partials/project_card.html - Card một dự án — Context: item, can_edit #}
+<div class="project-card">
+    <div class="status-bar" style="background-color:{{ item.get_status_display_color }};"></div>
+    <div class="project-content">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="status-badge" style="background:{{ item.get_status_display_color }}22;color:{{ item.get_status_display_color }}">
+                <i class="fas fa-circle" style="font-size:0.5rem;margin-right:5px;"></i>
+                {{ item.get_status_display }}
+            </span>
+            <span style="font-size:0.75rem;color:#64748b;">ID: #{{ item.id }}</span>
+        </div>
+        <h3 class="project-title">{{ item.ten_cong_trinh }}</h3>
+        <div class="project-info">
+            <div class="info-item">
+                <i class="fas fa-map-marker-alt"></i>
+                <span>{{ item.dia_diem|default:"Chưa xác định địa điểm" }}</span>
+            </div>
+            <div class="info-item">
+                <i class="fas fa-calendar-alt"></i>
+                <span>{{ item.ngay_bat_dau|date:"d/m/Y" }} — {{ item.thoi_han_ket_thuc|date:"d/m/Y"|default:"Chưa chốt" }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="project-footer">
+        <a href="{% url 'payroll:du_an_detail' item.pk %}" class="btn btn-outline" style="font-size:0.75rem;padding:6px 12px;">
+            Xem chi tiết
+        </a>
+        <div class="action-group">
+            {% if can_edit %}
+            <a href="{% url 'payroll:du_an_edit' item.pk %}" class="btn-icon btn-edit" title="Chỉnh sửa"><i class="fas fa-pen"></i></a>
+            <a href="{% url 'payroll:du_an_delete' item.pk %}" class="btn-icon btn-delete" title="Xóa"><i class="fas fa-trash"></i></a>
+            {% endif %}
+        </div>
+    </div>
+</div>

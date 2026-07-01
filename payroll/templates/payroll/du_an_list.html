@@ -2,175 +2,39 @@
 
 {% block content %}
 <style>
-    /* Container layout */
-    .project-container {
-        padding: 20px;
-        background: var(--bg);
-    }
+.project-container { padding: 20px; }
+.toolbar-row {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 15px; margin-bottom: 2rem; flex-wrap: wrap;
+    background: #fff; padding: 15px; border-radius: 12px; border: 1px solid var(--border);
+}
+.toolbar-search { display: flex; gap: 10px; flex: 1; min-width: 300px; }
+.search-box { position: relative; flex: 1; }
+.search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+.search-box input { width: 100%; padding: 10px 10px 10px 35px; border-radius: 8px; border: 1px solid var(--border); outline: none; font-size: 0.9rem; }
+.toolbar-search select { padding: 10px 15px; border-radius: 8px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 0.9rem; }
 
-    /* Re-design Toolbar */
-    .toolbar-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 2rem;
-        flex-wrap: wrap;
-        background: #fff;
-        padding: 15px;
-        border-radius: 12px;
-        border: 1px solid var(--border);
-    }
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; }
+.project-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; transition: transform 0.2s, box-shadow 0.2s; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); height: 100%; }
+.project-card:hover { transform: translateY(-8px); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+.status-bar { height: 6px; width: 100%; }
+.project-content { padding: 20px; flex-grow: 1; }
+.status-badge { padding: 4px 12px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.project-title { margin: 10px 0 15px 0; font-size: 1.25rem; font-weight: 700; color: var(--text-main); line-height: 1.4; }
+.project-info { display: flex; flex-direction: column; gap: 10px; padding-bottom: 20px; border-bottom: 1px dashed var(--border); }
+.info-item { display: flex; align-items: center; gap: 10px; font-size: 0.85rem; color: var(--text-muted); }
+.info-item i { width: 16px; color: var(--primary); }
+.project-footer { padding: 15px 20px; background: #f9fafb; display: flex; justify-content: space-between; align-items: center; }
+.action-group { display: flex; gap: 8px; }
 
-    .toolbar-search {
-        display: flex;
-        gap: 10px;
-        flex: 1;
-        min-width: 300px;
-    }
-
-    .search-box {
-        position: relative;
-        flex: 1;
-    }
-
-    .search-box i {
-        position: absolute;
-        left: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: var(--text-muted);
-    }
-
-    .search-box input {
-        width: 100%;
-        padding: 10px 10px 10px 35px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: #fff;
-        outline: none;
-        font-size: 0.9rem;
-    }
-
-    .toolbar-search select, .toolbar-search .btn {
-        padding: 10px 15px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: #fff;
-        cursor: pointer;
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-    }
-
-    /* Grid & Cards */
-    .project-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-        gap: 25px;
-    }
-
-    .project-card {
-        background: #ffffff;
-        border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 0;
-        transition: transform 0.2s, box-shadow 0.2s;
-        display: flex;
-        flex-direction: column;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        height: 100%;
-    }
-
-    .project-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    }
-
-    /* Status Indicator Bar */
-    .status-bar {
-        height: 6px;
-        width: 100%;
-    }
-
-    .project-content {
-        padding: 20px;
-        flex-grow: 1;
-    }
-
-    .status-badge {
-        padding: 4px 12px;
-        border-radius: 6px;
-        font-size: 0.7rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    .project-title {
-        margin: 10px 0 15px 0;
-        font-size: 1.25rem;
-        font-weight: 700;
-        color: var(--text-main);
-        line-height: 1.4;
-    }
-
-    .project-info {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        padding-bottom: 20px;
-        border-bottom: 1px dashed var(--border);
-    }
-
-    .info-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 0.85rem;
-        color: var(--text-muted);
-    }
-
-    .info-item i {
-        width: 16px;
-        color: var(--primary);
-    }
-
-    .project-footer {
-        padding: 15px 20px;
-        background: #f9fafb;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .empty-state {
-        grid-column: 1 / -1;
-        text-align: center;
-        padding: 80px 20px;
-        background: #fff;
-        border-radius: 16px;
-        border: 2px dashed #cbd5e1;
-        width: 100%;
-    }
-
-    .empty-state i {
-        font-size: 3rem;
-        color: #94a3b8;
-        margin-bottom: 20px;
-        opacity: 0.3;
-    }
-
-    @media (max-width: 640px) {
-        .toolbar-row { flex-direction: column; align-items: stretch; }
-        .toolbar-search { min-width: 0; flex-direction: column; }
-        .toolbar-search select { height: 42px; }
-    }
+@media (max-width: 640px) {
+    .toolbar-row { flex-direction: column; align-items: stretch; }
+    .toolbar-search { min-width: 0; flex-direction: column; }
+}
 </style>
 
 <div class="project-container">
+    {# ── Toolbar ── #}
     <div class="toolbar-row">
         <form method="GET" class="toolbar-search">
             <div class="search-box">
@@ -183,11 +47,8 @@
                 <option value="{{ code }}" {% if status_filter == code %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
-            <button type="submit" class="btn btn-outline">
-                <i class="fas fa-filter"></i> Lọc
-            </button>
+            <button type="submit" class="btn btn-outline"><i class="fas fa-filter"></i> Lọc</button>
         </form>
-        
         {% if can_edit %}
         <a href="{% url 'payroll:du_an_create' %}" class="btn btn-primary">
             <i class="fas fa-plus"></i> Thêm dự án mới
@@ -195,57 +56,12 @@
         {% endif %}
     </div>
 
+    {# ── Grid dự án ── #}
     <div class="project-grid">
         {% for item in du_an %}
-        <div class="project-card">
-            <div class="status-bar" style="background-color: {{ item.get_status_display_color }};"></div>
-            
-            <div class="project-content">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="status-badge" style="background: {{ item.get_status_display_color }}22; color: {{ item.get_status_display_color }}">
-                        <i class="fas fa-circle" style="font-size: 0.5rem; margin-right: 5px;"></i>
-                        {{ item.get_status_display }}
-                    </span>
-                    <span style="font-size: 0.75rem; color: #64748b;">ID: #{{ item.id }}</span>
-                </div>
-                
-                <h3 class="project-title">{{ item.ten_cong_trinh }}</h3>
-                
-                <div class="project-info">
-                    <div class="info-item">
-                        <i class="fas fa-map-marker-alt"></i>
-                        <span>{{ item.dia_diem|default:"Chưa xác định địa điểm" }}</span>
-                    </div>
-                    <div class="info-item">
-                        <i class="fas fa-calendar-alt"></i>
-                        <span>{{ item.ngay_bat_dau|date:"d/m/Y" }} — {{ item.thoi_han_ket_thuc|date:"d/m/Y"|default:"Chưa chốt" }}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="project-footer">
-                <a href="{% url 'payroll:du_an_detail' item.pk %}" class="btn btn-outline" style="font-size: 0.75rem; padding: 6px 12px;">
-                    Xem chi tiết
-                </a>
-                
-                <div class="action-group">
-                    {% if can_edit %}
-                    <a href="{% url 'payroll:du_an_edit' item.pk %}" class="btn-icon btn-edit" title="Chỉnh sửa">
-                        <i class="fas fa-pen"></i>
-                    </a>
-                    <a href="{% url 'payroll:du_an_delete' item.pk %}" class="btn-icon btn-delete" title="Xóa">
-                        <i class="fas fa-trash"></i>
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
+            {% include "payroll/partials/project_card.html" with item=item %}
         {% empty %}
-        <div class="empty-state">
-            <i class="fas fa-project-diagram"></i>
-            <h3>Không tìm thấy dự án nào</h3>
-            <p>Vui lòng thử lại với từ khóa khác hoặc tạo dự án mới.</p>
-        </div>
+            {% include "payroll/components/empty_state.html" with empty_icon="fa-project-diagram" empty_title="Không tìm thấy dự án nào" empty_message="Vui lòng thử lại với từ khóa khác hoặc tạo dự án mới." %}
         {% endfor %}
     </div>
 </div>

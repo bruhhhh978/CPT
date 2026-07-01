@@ -1,0 +1,46 @@
+{# partials/modal_edit_worker.html - Modal chỉnh sửa nhân viên #}
+{% if can_edit %}
+<div id="edit-worker-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Chỉnh Sửa Thông Tin</h2>
+            <button onclick="document.getElementById('edit-worker-modal').style.display='none'" class="btn btn-close">&times;</button>
+        </div>
+        <form id="edit-worker-form" method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+                <label>Họ và tên</label>
+                <input type="text" name="name" id="edit-name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Ngày sinh</label>
+                <input type="date" name="date_of_birth" id="edit-date-of-birth" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>Nghề / Chức vụ</label>
+                <select name="position" id="edit-position" class="form-input">
+                    <option value="Tho">Thợ</option>
+                    <option value="Phu">Phụ</option>
+                    <option value="Cai">Cai</option>
+                    <option value="DN">Đội ngũ khác</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Lương ngày (VNĐ)</label>
+                <input type="number" name="daily_wage" id="edit-wage" required class="form-input">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;">CẬP NHẬT</button>
+        </form>
+    </div>
+</div>
+<script>
+function openEditModal(id, name, position, wage) {
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-position').value = position;
+    document.getElementById('edit-wage').value = wage;
+    document.getElementById('edit-worker-form').action =
+        '{% url "payroll:edit_employee" 0 %}'.replace('0', id);
+    document.getElementById('edit-worker-modal').style.display = 'block';
+}
+</script>
+{% endif %}

@@ -7,5 +7,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path('payroll/', include('payroll.urls')),
     path('', include('payroll.urls')),
+    path('', include(('payroll.urls', 'payroll'), namespace='payroll')),
     path('login/', include('login.urls')),
 ]

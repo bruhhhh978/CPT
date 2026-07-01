@@ -1,0 +1,20 @@
+<div class="th-header-card">
+    <div>
+        <div class="th-sub">{{ ten_cty }} — {{ khoang_tg }}</div>
+        <h2>📋 {{ ten_bang }}</h2>
+        <div class="th-sub">🏗️ {{ ten_ct }}</div>
+    </div>
+    <div class="th-actions">
+        <a href="{% url 'payroll:payroll_statistics' %}?date={{ tuan_cols.0.week_start|date:'Y-m-d' }}&view_type=week"
+           class="btn-outline-white">
+            <i class="fas fa-chart-bar"></i> Thống kê
+        </a>
+        <a href="{% url 'payroll:payroll_sheet' %}?date={{ tuan_cols.0.week_start|date:'Y-m-d' }}&view_type=week"
+           class="btn-outline-white">
+            <i class="fas fa-table"></i> Bảng lương
+        </a>
+        <button onclick="window.print()" class="btn-white">
+            <i class="fas fa-print"></i> In bảng
+        </button>
+    </div>
+</div>

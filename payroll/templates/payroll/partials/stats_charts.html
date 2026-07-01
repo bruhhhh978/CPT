@@ -1,0 +1,57 @@
+{# partials/stats_charts.html - Hai biểu đồ Chart.js: theo nhân viên và theo ngày #}
+<div class="chart-grid">
+    <div class="card chart-card">
+        <div class="section-heading">
+            <div>
+                <h3>Biểu đồ theo nhân viên</h3>
+                <p>So sánh tổng thời gian làm việc và tăng ca trong tuần.</p>
+            </div>
+        </div>
+        <canvas id="employeeChart"></canvas>
+    </div>
+    <div class="card chart-card">
+        <div class="section-heading">
+            <div>
+                <h3>Biểu đồ theo ngày</h3>
+                <p>Theo dõi biến động công HC và TC từng ngày trong tuần.</p>
+            </div>
+        </div>
+        <canvas id="dailyChart"></canvas>
+    </div>
+</div>
+
+{{ chart_rows|json_script:"employee-chart-data" }}
+{{ daily_totals|json_script:"daily-chart-data" }}
+
+<script>
+(function() {
+    const employeeRows = JSON.parse(document.getElementById('employee-chart-data').textContent);
+    const dailyRows    = JSON.parse(document.getElementById('daily-chart-data').textContent);
+
+    new Chart(document.getElementById('employeeChart'), {
+        type: 'bar',
+        data: {
+            labels: employeeRows.map(i => i.name),
+            datasets: [
+                { label:'Công HC', data:employeeRows.map(i=>i.hc), backgroundColor:'rgba(249,115,22,0.75)', borderRadius:8 },
+                { label:'Công TC', data:employeeRows.map(i=>i.tc), backgroundColor:'rgba(14,165,233,0.75)',  borderRadius:8 }
+            ]
+        },
+        options: { responsive:true, maintainAspectRatio:false,
+            plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true}} }
+    });
+
+    new Chart(document.getElementById('dailyChart'), {
+        type: 'line',
+        data: {
+            labels: dailyRows.map(i => i.label),
+            datasets: [
+                { label:'Tổng HC', data:dailyRows.map(i=>i.hc), borderColor:'rgba(249,115,22,1)',  backgroundColor:'rgba(249,115,22,0.18)', fill:true, tension:0.35 },
+                { label:'Tổng TC', data:dailyRows.map(i=>i.tc), borderColor:'rgba(14,165,233,1)',  backgroundColor:'rgba(14,165,233,0.12)', fill:true, tension:0.35 }
+            ]
+        },
+        options: { responsive:true, maintainAspectRatio:false,
+            plugins:{legend:{position:'top'}}, scales:{y:{beginAtZero:true}} }
+    });
+})();
+</script>
