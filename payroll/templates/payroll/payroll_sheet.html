@@ -305,11 +305,15 @@
             class="btn btn-outline">
             <i class="fas fa-chart-column"></i> Thống kê
         </a>
+        <a href="{% url 'payroll:export_phieu_luong_pdf' %}?date={{ start_date|date:'Y-m-d' }}{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
+            class="btn btn-outline" target="_blank">
+                <i class="fas fa-file-pdf"></i> In Phiếu Lương
+            </a>
         <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}&export=excel{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
             class="btn btn-primary">
             <i class="fas fa-file-excel"></i> Xuất Excel
         </a>
-
+        
         {% if can_edit %}
         <form method="POST" action="{% url 'payroll:delete_all_data' %}" style="display:inline;"
             onsubmit="return confirm('CẢNH BÁO: Sẽ xóa toàn bộ chấm công{% if du_an_obj %} của dự án {{ du_an_obj.ten_cong_trinh }}{% endif %}. Bạn có chắc không?')">

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<style>
+    @page { size: A4; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, "Segoe UI", sans-serif; font-size: 11px; color: #1a1a1a; }
+
+    .page {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 10mm;
+        height: 277mm;
+        page-break-after: always;
+    }
+    .page:last-child { page-break-after: auto; }
+
+    .phieu {
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 10px 14px;
+    }
+
+    .ten-cty { text-align: center; font-weight: bold; font-size: 12px; }
+    .tieu-de { text-align: center; font-weight: bold; font-size: 13px; margin: 2px 0 8px; }
+
+    .box-tuan {
+        border: 1px solid #333;
+        text-align: center;
+        font-weight: 600;
+        padding: 3px;
+        margin-bottom: 8px;
+    }
+
+    .row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .row .label { white-space: nowrap; flex-shrink: 0; }
+    .row .label.bold { font-weight: bold; }
+
+    .field {
+        border: 1px solid #333;
+        padding: 3px 6px;
+        flex: 1;
+        min-height: 18px;
+    }
+    .field.right  { text-align: right; }
+    .field.bold   { font-weight: bold; }
+    .field.fixed  { flex: 0 0 100px; }
+    .field.fixed-sm { flex: 0 0 36px; text-align: center; }
+    .field.name   { font-weight: 600; }
+    .field.blank  { min-height: 30px; }
+
+    .plain { flex-shrink: 0; min-width: 30px; }
+</style>
+</head>
+<body>
+
+{% for chunk in payroll_data_chunks %}
+<div class="page">
+    {% for row in chunk %}
+    <div class="phieu">
+        <div class="ten-cty">{{ ten_cty }}</div>
+        <div class="tieu-de">PHIẾU LƯƠNG CÁ NHÂN</div>
+        <div class="box-tuan">Tuần {{ tuan_so }} ( {{ start_date|date:"d/m" }} - {{ end_date|date:"d/m/Y" }})</div>
+
+        <div class="row">
+            <span class="label">Công trình</span>
+            <div class="field">{{ ten_ct }}</div>
+            <span class="label plain">STT</span>
+            <div class="field fixed-sm bold">{{ row.stt }}</div>
+        </div>
+
+        <div class="row">
+            <span class="label">Họ và tên</span>
+            <div class="field name">{{ row.employee.name }}</div>
+        </div>
+
+        <div class="row">
+            <span class="label">Tiền công 1 ngày</span>
+            <div class="field fixed right">{{ row.employee.daily_wage|floatformat:0 }}</div>
+            <span class="label plain">{{ row.employee.position }}</span>
+        </div>
+
+        <div class="row">
+            <span class="label">Số ngày công:</span>
+            <div class="field fixed right">{{ row.total_hc }}</div>
+        </div>
+
+        <div class="row">
+            <span class="label bold">I. Các khoản được hưởng</span>
+            <div class="field fixed right bold">{{ row.total_pay|floatformat:0 }}</div>
+        </div>
+
+        <div class="row">
+            <span class="label">Lương HC</span>
+            <div class="field fixed right">{{ row.luong_hc|floatformat:0 }}</div>
+        </div>
+
+        <div class="row">
+            <span class="label">Lương TC</span>
+            <div class="field fixed right">{{ row.luong_tc|floatformat:0 }}</div>
+            <span class="label plain">Công TC</span>
+            <div class="field fixed right">{{ row.total_tc }}</div>
+        </div>
+
+        <div class="row">
+            <span class="label">Tăng</span>
+            <div class="field fixed right">{{ row.adjustment|floatformat:0 }}</div>
+        </div>
+
+        <div class="field blank" style="margin-bottom:6px;"></div>
+
+        <div class="row">
+            <span class="label">II. Các khoản giảm trừ</span>
+            <div class="field fixed right">0</div>
+        </div>
+
+        <div class="row">
+            <span class="label plain"></span>
+            <div class="field fixed right" style="margin-left:auto;">0</div>
+        </div>
+
+        <div class="row">
+            <span class="label bold">III. Còn được lãnh</span>
+            <div class="field fixed right bold">{{ row.total_pay|floatformat:0 }}</div>
+        </div>
+
+        <div class="field blank"></div>
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}
+
+</body>
+</html>

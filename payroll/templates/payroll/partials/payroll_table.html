@@ -54,7 +54,7 @@
                         maxlength="6" {% if not can_edit %}disabled{% endif %}>
                 </td>
                 {% endfor %}
-                <td class="total-hc-col cell-total-hc">{{ row.total_hc|floatformat:"0" }}</td>
+                <td class="total-hc-col cell-total-hc">{{ row.total_hc|floatformat:"-1" }}</td>
                 <td class="total-tc-col cell-total-tc">{{ row.total_tc|floatformat:"0" }}</td>
                 <td class="wage-col">{{ row.employee.daily_wage|floatformat:0|intcomma }} đ</td>
                 <td class="adj-col">
@@ -98,3 +98,56 @@
         </tbody>
     </table>
 </div>
+<script>
+    // Validate ô chấm công HC và TC
+(function () {
+    function applyHC(input) {
+        input.addEventListener('keydown', function (e) {
+            const allowed = ['x', 'X', '/', 'Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight'];
+            if (!allowed.includes(e.key)) e.preventDefault();
+        });
+        input.addEventListener('input', function () {
+            const val = this.value.toLowerCase();
+            if (val === 'x' || val === '/') {
+                this.value = val;
+            } else {
+                this.value = val.replace(/[^x\/]/g, '').slice(0, 1);
+            }
+        });
+    }
+
+    function applyTC(input) {
+        input.addEventListener('keydown', function (e) {
+            const allowed = ['0','1','2','3','4','5','6','7','8','9',
+                             'Backspace','Delete','Tab','ArrowLeft','ArrowRight'];
+            if (!allowed.includes(e.key)) e.preventDefault();
+        });
+        input.addEventListener('input', function () {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value.length > 1 && this.value.startsWith('0')) {
+                this.value = this.value.replace(/^0+/, '');
+            }
+        });
+    }
+
+    function initAll() {
+        document.querySelectorAll('.att-hc').forEach(applyHC);
+        document.querySelectorAll('.att-tc').forEach(applyTC);
+    }
+
+    window.addEventListener('load', initAll);
+
+    if ('MutationObserver' in window) {
+        new MutationObserver(function (mutations) {
+            mutations.forEach(function (m) {
+                m.addedNodes.forEach(function (node) {
+                    if (node.nodeType === 1) {
+                        node.querySelectorAll('.att-hc').forEach(applyHC);
+                        node.querySelectorAll('.att-tc').forEach(applyTC);
+                    }
+                });
+            });
+        }).observe(document.body, { childList: true, subtree: true });
+    }
+})();
+</script>

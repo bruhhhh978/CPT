@@ -28,6 +28,7 @@ import calendar
 from decimal import Decimal, ROUND_HALF_UP
 from django.contrib.auth.decorators import login_required
 from collections import defaultdict
+from playwright.sync_api import sync_playwright
 
 # ============ MANAGER DASHBOARD & USER MANAGEMENT ============
 
@@ -380,7 +381,7 @@ def build_weekly_payroll_data(employees, dates, du_an_id=None):
         payroll_data.append({
             'employee': emp,
             'daily_attendance': daily_atts,
-            'total_hc': total_hc.quantize(Decimal('1'), rounding=ROUND_HALF_UP),
+            'total_hc': total_hc,
             'total_tc': total_tc.quantize(Decimal('1'), rounding=ROUND_HALF_UP),
             'adjustment': adjustment_val,
             'total_pay': total_pay
@@ -2017,8 +2018,6 @@ def api_online_users(request):
  
     return JsonResponse({'users': data, 'count': len(data)})
  
-
-# --- Thống kê chi tiêu tổng hợp theo dự án, tháng, năm ---
 @allow_viewer
 def chi_tieu_tong_hop(request):
     from .models import Attendance, CongTrinh, Adjustment
@@ -2495,3 +2494,56 @@ def chi_tieu_export_excel(request):
 
     wb.save(response)
     return response
+
+def chunk_list(lst, size):
+    return [lst[i:i + size] for i in range(0, len(lst), size)]
+
+@allow_viewer
+def export_phieu_luong_pdf(request):
+    du_an_id = request.GET.get('du_an_id') or ''
+    target_date = get_target_date(request)
+    dates = get_week_range(target_date)
+    start_date, end_date = dates[0], dates[-1]
+
+    du_an_obj = CongTrinh.objects.filter(id=du_an_id).first() if du_an_id else None
+
+    SUMMARY_NAMES = ['Tổng số Cai', 'Tổng số Kho', 'Tổng số LĐ', 'Người chấm công', 'Cộng', 'Tổng cộng']
+    if du_an_id:
+        emp_ids = Attendance.objects.filter(cong_trinh_id=du_an_id).values_list('employee_id', flat=True).distinct()
+        employees = Employee.objects.filter(id__in=emp_ids).exclude(name__in=SUMMARY_NAMES).order_by('name')
+    else:
+        employees = Employee.objects.exclude(name__in=SUMMARY_NAMES).order_by('name')
+
+    payroll_data = build_weekly_payroll_data(employees, dates, du_an_id=du_an_id)
+    
+    
+    for i, r in enumerate(payroll_data, start=1):
+        r['stt'] = i
+        r['luong_hc'] = r['total_hc'] * r['employee'].daily_wage
+        r['luong_tc'] = r['total_tc'] * (r['employee'].daily_wage / Decimal('8'))
+
+    payroll_data = [r for r in payroll_data if r['total_hc'] > 0 or r['total_tc'] > 0]
+    all_weeks = get_available_weeks(du_an_id=du_an_id)
+    tuan_so = (all_weeks.index(start_date) + 1) if start_date in all_weeks else 1
+
+    html_string = render_to_string('payroll/phieu_luong_pdf.html', {
+        'ten_cty': 'CTy CP XD CPT',
+        'ten_ct': du_an_obj.ten_cong_trinh if du_an_obj else '',
+        'tuan_so': f'{tuan_so:02d}',
+        'start_date': start_date, 'end_date': end_date,
+        'payroll_data_chunks': chunk_list(payroll_data, 4),
+    })
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.set_content(html_string, wait_until='networkidle')
+        pdf_bytes = page.pdf(format='A4', margin={'top': '0mm', 'bottom': '0mm', 'left': '0mm', 'right': '0mm'})
+        browser.close()
+
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    filename = f'PhieuLuong_Tuan{tuan_so:02d}_{start_date.strftime("%d%m%Y")}.pdf'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    log_activity(request, 'EXPORT', 'BaoCao', description=f'Xuất phiếu lương PDF tuần {tuan_so:02d}')
+    return response
+
