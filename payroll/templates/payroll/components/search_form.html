@@ -5,11 +5,11 @@
     {% if du_an_id %}<input type="hidden" name="du_an_id" value="{{ du_an_id }}">{% endif %}
     <div class="search-box">
         <i class="fas fa-search"></i>
-        <input type="text" name="q" value="{{ search_query }}" placeholder="Tìm theo tên...">
+        <input type="text" name="q" value="{{ search_query }}" placeholder="{{ search_placeholder|default:'Tìm theo tên...' }}" aria-label="Tìm theo tên nhân viên">
     </div>
-    <button type="submit" class="btn btn-outline">Tìm</button>
+    <button type="submit" class="btn btn-outline">{{ search_button_label|default:'Tìm' }}</button>
     {% if search_query %}
     <a href="?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
-       class="btn btn-outline" title="Xóa lọc">✕</a>
+       class="btn btn-outline stats-toolbar-clear" title="Xóa từ khóa" aria-label="Xóa từ khóa tìm kiếm"><i class="fas fa-times"></i></a>
     {% endif %}
 </form>

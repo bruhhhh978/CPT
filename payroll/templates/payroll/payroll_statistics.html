@@ -7,67 +7,151 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 .stats-toolbar-card {
-    padding: .85rem;
+    padding: 1rem;
 }
 .stats-toolbar {
     display: grid;
-    grid-template-columns: minmax(360px, auto) minmax(280px, 1fr) auto;
-    gap: .75rem;
-    align-items: center;
+    grid-template-columns: minmax(370px, 1.05fr) minmax(330px, 1fr) auto;
+    gap: 1rem;
+    align-items: end;
 }
 .stats-toolbar-group {
     display: flex;
-    align-items: center;
-    gap: .5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .4rem;
     min-width: 0;
 }
-.stats-toolbar-period {
-    justify-content: flex-start;
+.stats-toolbar-label {
+    color: var(--text-muted);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
 }
-.stats-toolbar-search {
-    justify-content: center;
-}
-.stats-toolbar-actions {
-    justify-content: flex-end;
+.stats-toolbar-control {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    min-width: 0;
 }
 .stats-toolbar .date-pill {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    height: 42px;
+    padding: 0 .65rem;
+    border: 1px solid var(--border);
+    border-radius: .65rem;
     background: #fff;
-    margin: 0;
+    transition: border-color .2s, box-shadow .2s;
+}
+.stats-toolbar .date-pill:focus-within,
+.stats-toolbar .toolbar-search .search-box:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(249, 115, 22, .12);
+}
+.stats-toolbar .date-pill select {
+    height: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: .84rem;
+    font-weight: 600;
+}
+.stats-toolbar .date-pill #view-type-select {
+    width: 78px;
+    padding-right: .35rem;
+    border-right: 1px solid var(--border);
 }
 .stats-toolbar .date-pill .period-select {
-    width: 240px;
-    max-width: 240px;
+    flex: 1;
+    width: auto;
+    min-width: 190px;
+    padding-left: .55rem;
+}
+.stats-toolbar .nav-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border);
+    border-radius: .65rem;
+    background: #fff;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: background .2s, border-color .2s, color .2s;
+}
+.stats-toolbar .nav-btn:hover {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: #fff;
 }
 .stats-toolbar .toolbar-search {
-    flex: 1 1 420px !important;
-    max-width: 560px;
-    min-width: 260px;
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto !important;
+    gap: .4rem;
+    width: 100%;
+    min-width: 0;
 }
 .stats-toolbar .toolbar-search .search-box {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    gap: .55rem;
+    height: 42px;
+    min-width: 0;
+    padding: 0 .75rem;
+    border: 1px solid var(--border);
+    border-radius: .65rem;
     background: #fff;
+    transition: border-color .2s, box-shadow .2s;
+}
+.stats-toolbar .toolbar-search .search-box i {
+    color: var(--text-muted);
+    font-size: .85rem;
+}
+.stats-toolbar .toolbar-search .search-box input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--text-main);
+    font-size: .86rem;
 }
 .stats-toolbar .btn,
 .stats-toolbar .nav-btn {
-    height: 36px;
+    height: 42px;
     box-sizing: border-box;
 }
 .stats-toolbar .btn {
-    padding: 0 .85rem;
+    justify-content: center;
+    padding: 0 .9rem;
     white-space: nowrap;
+}
+.stats-toolbar-actions .stats-toolbar-control {
+    justify-content: flex-end;
+}
+.stats-toolbar-clear {
+    width: 42px;
+    padding: 0 !important;
+    font-size: .8rem;
 }
 @media (max-width: 1100px) {
     .stats-toolbar {
         grid-template-columns: 1fr;
     }
-    .stats-toolbar-group,
-    .stats-toolbar-search,
-    .stats-toolbar-actions {
+    .stats-toolbar-actions .stats-toolbar-control {
         justify-content: flex-start;
     }
     .stats-toolbar .toolbar-search {
-        max-width: none;
-        width: 100%;
-        flex-basis: 100% !important;
+        flex-basis: auto !important;
     }
 }
 </style>
@@ -80,21 +164,30 @@
     <div class="card stats-toolbar-card">
         <div class="stats-toolbar">
             <div class="stats-toolbar-group stats-toolbar-period">
-                {% include "payroll/components/period_picker.html" %}
+                <span class="stats-toolbar-label"><i class="far fa-calendar-alt"></i> Thời gian thống kê</span>
+                <div class="stats-toolbar-control">
+                    {% include "payroll/components/period_picker.html" %}
+                </div>
             </div>
 
             <div class="stats-toolbar-group stats-toolbar-search">
-                {% include "payroll/components/search_form.html" %}
+                <span class="stats-toolbar-label"><i class="fas fa-user-search"></i> Tìm nhân viên</span>
+                <div class="stats-toolbar-control">
+                    {% include "payroll/components/search_form.html" with search_placeholder="Nhập tên nhân viên..." search_button_label="Tra cứu" %}
+                </div>
             </div>
 
             <div class="stats-toolbar-group stats-toolbar-actions">
-                <a href="{% url 'payroll:tong_hop_2026' %}" class="btn btn-outline">
-                    <i class="fas fa-list-alt"></i> Tổng hợp 2026
-                </a>
-                <a href="{% url 'payroll:payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
-                   class="btn btn-primary">
-                    <i class="fas fa-table"></i> Bảng lương
-                </a>
+                <span class="stats-toolbar-label">Đi tới</span>
+                <div class="stats-toolbar-control">
+                    <a href="{% url 'payroll:tong_hop_2026' %}" class="btn btn-outline">
+                        <i class="fas fa-list-alt"></i> Tổng hợp 2026
+                    </a>
+                    <a href="{% url 'payroll:payroll_sheet' %}?date={{ start_date|date:'Y-m-d' }}&view_type={{ view_type }}{% if du_an_id %}&du_an_id={{ du_an_id }}{% endif %}"
+                       class="btn btn-primary">
+                        <i class="fas fa-table"></i> Bảng lương
+                    </a>
+                </div>
             </div>
         </div>
     </div>
