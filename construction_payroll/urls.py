@@ -5,6 +5,7 @@ from payroll import views as payroll_views
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path('payroll/', include('payroll.urls')),
     path('', include('payroll.urls')),
     path('login/', include('login.urls')),
 ]
